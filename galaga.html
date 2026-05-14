@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Galaga - Juego</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    :root{--bg:#06071a;--panel:#0b1533;--accent:#39ff14;--danger:#ff4666}
+    body{margin:0;background:linear-gradient(180deg,var(--bg),#000);color:#fff;font-family:Consolas,monospace,Arial;display:flex;flex-direction:column;align-items:center}
+    header{padding:12px;text-align:center}
+    #gameWrap{position:relative;width:900px;max-width:95vw}
+    canvas{display:block;background:linear-gradient(#001022, #001018);width:100%;height:auto;border:4px solid #111;box-shadow:0 8px 30px rgba(0,0,0,.6)}
+    #hud{position:absolute;left:12px;top:12px;background:rgba(0,0,0,.35);padding:8px;border-radius:6px;color:var(--accent)}
+    #hud .stat{margin-right:12px}
+    #controls{position:absolute;right:12px;top:12px;background:rgba(0,0,0,.35);padding:8px;border-radius:6px;font-size:14px}
+    #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+    #menu{background:rgba(8,12,23,.9);padding:18px;border-radius:10px;text-align:center;min-width:260px;pointer-events:auto}
+    button{background:var(--accent);color:#000;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;font-weight:700}
+    button.secondary{background:transparent;color:#fff;border:1px solid #555}
+    small{color:#bbb}
+    footer{margin:14px;color:#9aa}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Mini Galaga</h1>
+    <p><small>Flechas izquierda/derecha para mover, barra espaciadora para disparar</small></p>
+  </header>
+  <div id="gameWrap">
+    <canvas id="c" width="800" height="600"></canvas>
+    <div id="hud">
+      <span class="stat">Puntaje: <span id="score">0</span></span>
+      <span class="stat">Vidas: <span id="lives">3</span></span>
+      <span class="stat">Nivel: <span id="level">1</span></span>
+    </div>
+    <div id="controls">Mover: ← → · Disparar: SPACE · Pausa: P</div>
+    <div id="overlay">
+      <div id="menu" role="dialog">
+        <h2 id="menuTitle">Presiona INICIAR</h2>
+        <p id="menuText">Una nave, dispara a las naves enemigas. Buena suerte.</p>
+        <div style="margin-top:12px">
+          <button id="btnStart">Iniciar</button>
+          <button id="btnRestart" class="secondary" style="margin-left:8px">Reiniciar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <footer>Hecho por el asistente · Abre este archivo en tu navegador</footer>
+
+  <script>
+  (function(){
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+
+    // HUD
+    const elScore = document.getElementById('score');
+    const elLives = document.getElementById('lives');
+    const elLevel = document.getElementById('level');
+    const overlay = document.getElementById('overlay');
+    const menuTitle = document.getElementById('menuTitle');
+
+    // Game state
+    let keys = {};
+    let bullets = [];
+    let enemies = [];
+    let score = 0;
+    let lives = 3;
+    let level = 1;
+    let gameOver = false;
+    let running = false;
+    let enemySpeed = 1.0;
+    let enemyDir = 1; // 1 right, -1 left
+    let enemyDrop = 20;
+    let lastFire = 0;
+    const fireCooldown = 300; // ms
+
+    // Player
+    const player = {w:40,h:24,x:W/2-20,y:H-60,speed:6, color:'#39ff14'};
+
+    function spawnEnemies(rows=3, cols=8){
+      enemies = [];
+      const marginX = 60;
+      const spacingX = (W - marginX*2) / cols;
+      for(let r=0;r<rows;r++){
+        for(let c=0;c<cols;c++){
+          enemies.push({
+            x: marginX + c*spacingX + 8,
+            y: 60 + r*44,
+            w:36,h:22,
+            alive:true,
+            offset: (r+c)%2
+          });
+        }
+      }
+    }
+
+    function reset(){
+      bullets=[]; enemies=[]; score=0; lives=3; level=1; enemySpeed=1; enemyDir=1; gameOver=false; running=false;
+      updateHUD();
+      spawnEnemies(3,8);
+      showMenu();
+    }
+
+    function updateHUD(){ elScore.textContent = score; elLives.textContent = lives; elLevel.textContent = level; }
+
+    function showMenu(msg){ menuTitle.textContent = msg||'Presiona INICIAR'; overlay.style.display='flex'; }
+    function hideMenu(){ overlay.style.display='none'; }
+
+    function fire(){
+      const now = Date.now();
+      if(now - lastFire < fireCooldown) return;
+      lastFire = now;
+      bullets.push({x: player.x + player.w/2 - 3, y: player.y-8, w:6,h:10, speed:10});
+    }
+
+    // Controls
+    document.addEventListener('keydown', e=>{
+      if(e.code==='Space'){ e.preventDefault(); fire(); }
+      if(e.code==='KeyP'){ running = !running; if(!running) showMenu('Pausado'); else hideMenu(); }
+      keys[e.code]=true;
+    });
+    document.addEventListener('keyup', e=>{ keys[e.code]=false; })
+
+    // Support arrow keys and A/D
+    function applyInput(){
+      if(keys['ArrowLeft']||keys['KeyA']){ player.x -= player.speed; }
+      if(keys['ArrowRight']||keys['KeyD']){ player.x += player.speed; }
+      // clamp
+      if(player.x < 6) player.x = 6;
+      if(player.x + player.w > W-6) player.x = W-6 - player.w;
+    }
+
+    // Game update
+    let lastTime = 0;
+    function update(dt){
+      if(!running) return;
+      applyInput();
+
+      // move bullets
+      for(let i=bullets.length-1;i>=0;i--){
+        bullets[i].y -= bullets[i].speed;
+        if(bullets[i].y < -20) bullets.splice(i,1);
+      }
+
+      // move enemies as a group
+      let rightmost = 0, leftmost = W;
+      enemies.forEach(e=>{ if(!e.alive) return; rightmost = Math.max(rightmost, e.x+e.w); leftmost = Math.min(leftmost, e.x); });
+      // change direction if touching edges
+      if(rightmost > W-12) enemyDir = -1, enemies.forEach(e=>e.y += enemyDrop);
+      else if(leftmost < 12) enemyDir = 1, enemies.forEach(e=>e.y += enemyDrop);
+
+      enemies.forEach(e=>{ if(!e.alive) return; e.x += enemyDir * enemySpeed; });
+
+      // collisions bullets vs enemies
+      for(let i=bullets.length-1;i>=0;i--){
+        const b = bullets[i];
+        for(let j=0;j<enemies.length;j++){
+          const en = enemies[j]; if(!en.alive) continue;
+          if(rectIntersect(b, en)){
+            en.alive = false; bullets.splice(i,1); score += 100; updateHUD(); break;
+          }
+        }
+      }
+
+      // enemies reach player or bottom
+      for(let en of enemies){ if(!en.alive) continue; if(en.y + en.h >= player.y){ lives--; updateHUD(); en.alive=false; if(lives<=0){ gameOver=true; running=false; showMenu('Game Over'); } }
+      }
+
+      // level cleared?
+      if(enemies.every(e=>!e.alive)){
+        level++; enemySpeed += 0.6; spawnEnemies(3 + Math.min(3, Math.floor(level/2)), 6 + Math.min(4, Math.floor(level/2))); updateHUD();
+      }
+    }
+
+    function rectIntersect(a,b){ return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y; }
+
+    // Draw
+    function draw(){
+      // background
+      ctx.fillStyle = '#001218'; ctx.fillRect(0,0,W,H);
+
+      // stars
+      for(let i=0;i<60;i++){ ctx.fillStyle='rgba(255,255,255,0.03)'; ctx.fillRect((i*37)%W, (i*13)%H, 2,2); }
+
+      // player
+      drawPlayer();
+
+      // bullets
+      ctx.fillStyle = '#39ff14';
+      bullets.forEach(b=>{ ctx.fillRect(b.x, b.y, b.w, b.h); });
+
+      // enemies
+      enemies.forEach((e,idx)=>{
+        if(!e.alive) return;
+        // simple ship shape
+        ctx.fillStyle = '#ffcc33';
+        ctx.fillRect(e.x, e.y, e.w, e.h);
+        ctx.fillStyle = '#ff8a33';
+        ctx.fillRect(e.x+6, e.y+4, e.w-12, e.h-8);
+      });
+
+      // HUD overlay handled by DOM
+    }
+
+    function drawPlayer(){
+      // triangular ship
+      ctx.save();
+      ctx.translate(player.x + player.w/2, player.y + player.h/2);
+      ctx.fillStyle = player.color;
+      ctx.beginPath(); ctx.moveTo(0,-player.h/2); ctx.lineTo(-player.w/2, player.h/2); ctx.lineTo(player.w/2, player.h/2); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+
+    function loop(ts){
+      const dt = ts - lastTime; lastTime = ts;
+      update(dt);
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    // Buttons
+    document.getElementById('btnStart').addEventListener('click', ()=>{ running=true; gameOver=false; hideMenu(); });
+    document.getElementById('btnRestart').addEventListener('click', ()=>{ reset(); hideMenu(); });
+
+    // Start
+    reset();
+    requestAnimationFrame(loop);
+
+    // Resize handling: keep canvas logical size fixed; CSS scales it.
+    window.addEventListener('blur', ()=>{ /* pause on blur? optional */ });
+
+    // Allow click to focus and shoot with keyboard
+    canvas.addEventListener('click', ()=>{ canvas.focus(); });
+
+  })();
+  </script>
+</body>
+</html>
