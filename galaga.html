@@ -32,6 +32,7 @@
       <span class="stat">Puntaje: <span id="score">0</span></span>
       <span class="stat">Vidas: <span id="lives">3</span></span>
       <span class="stat">Nivel: <span id="level">1</span></span>
+      <div id="fbStatus" style="font-size:12px;color:#9aa;margin-top:6px">Firebase: desconectado</div>
     </div>
     <div id="controls">Mover: ← → · Disparar: SPACE · Pausa: P</div>
     <div id="leaderboard" style="position:absolute;right:12px;bottom:12px;background:rgba(0,0,0,0.35);padding:8px;border-radius:6px;min-width:180px">
@@ -49,11 +50,12 @@
       </div>
     </div>
   </div>
-  <footer>Hecho por el asistente · Abre este archivo en tu navegador</footer>
+
 
   <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
   import { getDatabase, ref, push, query, orderByChild, limitToLast, onValue } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
 
   // Firebase configuration (provided)
   const firebaseConfig = {
@@ -68,10 +70,21 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
+  // Initialize auth (anonymous) so DB writes can be secured by auth != null rules
+  const auth = getAuth(app);
+  signInAnonymously(auth).then(()=>{
+    console.log('Signed in anonymously');
+    const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Firebase: conectado (anónimo)';
+  }).catch(err=>{
+    console.error('Firebase auth error', err);
+    const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Firebase auth error';
+  });
 
   function saveScore(name, score){
     const scoresRef = ref(db, 'scores');
-    return push(scoresRef, {name: name, score: score, ts: Date.now()});
+    return push(scoresRef, {name: name, score: score, ts: Date.now()})
+      .then(r=>{ const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Puntaje guardado'; return r; })
+      .catch(err=>{ console.error('Save error', err); const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Error guardando puntaje'; throw err; });
   }
 
   function loadTop10(){
@@ -121,6 +134,8 @@
     const overlay = document.getElementById('overlay');
     const menuTitle = document.getElementById('menuTitle');
     const controls = document.getElementById('controls');
+    const leaderboard = document.getElementById('leaderboard');
+    const isTouchDevice = navigator.maxTouchPoints && navigator.maxTouchPoints>0;
 
     // Game state
     let keys = {};
@@ -161,8 +176,29 @@
       }
     }
 
+    // Restart current level but preserve how many enemies were already destroyed.
+    // Accept deadCount param (number of enemies already destroyed BEFORE the death event)
+    function restartLevelPreserveKills(deadCount){
+      if(typeof deadCount !== 'number') deadCount = enemies.filter(e => !e.alive).length;
+      // compute rows/cols used for this level (same logic as when spawning on level-up)
+      const rows = 3 + Math.min(3, Math.floor(level/2));
+      const cols = 6 + Math.min(4, Math.floor(level/2));
+      // recreate the enemy grid for this level
+      spawnEnemies(rows, cols);
+      // mark deadCount enemies as dead so the level restarts with the same number of destroyed blocks
+      for(let i=0;i<deadCount && i<enemies.length;i++){
+        enemies[i].alive = false;
+      }
+      // reset enemy movement direction to default
+      enemyDir = 1;
+      // clear bullets and reset player position
+      bullets = [];
+      player.x = LOG_W/2 - player.w/2;
+    }
+
     function reset(){
-      bullets=[]; enemies=[]; score=0; lives=3; level=1; enemySpeed=1; enemyDir=1; gameOver=false; running=false;
+      bullets=[]; enemies=[]; score=0; lives=3; level=1; enemySpeed=1; enemyDir=1; gameOver=false; running=false; gameOverHandled=false;
+      player.x = LOG_W/2 - player.w/2;
       updateHUD();
       spawnEnemies(3,8);
       showMenu();
@@ -239,6 +275,7 @@
 
     // Game update
     let lastTime = 0;
+    let gameOverHandled = false; // prevents duplicate Game Over prompts
     function update(dt){
       if(!running) return;
       applyInput();
@@ -273,20 +310,35 @@
         }
       }
 
+      // compute how many were already dead BEFORE processing player collisions
+      const deadBefore = enemies.filter(e => !e.alive).length;
+
       // enemies reach player or bottom
       for(let en of enemies){
         if(!en.alive) continue;
         if(en.y + en.h >= player.y){
-          // only lose one life per frame even if multiple enemies overlap
+          // only flag a life loss once per frame even if multiple enemies overlap
           if(!lifeLostThisFrame){
-            lives--;
+            lives = Math.max(0, lives - 1);
             updateHUD();
             lifeLostThisFrame = true;
           }
+          // mark the colliding enemy dead (but deadBefore does not include this one)
           en.alive = false;
-          if(lives<=0){
-            gameOver=true; running=false; showMenu('Game Over');
-            // prompt to save score
+        }
+      }
+
+      // If a life was lost this frame, handle respawn or game over
+      if(lifeLostThisFrame){
+        if(lives <= 0){
+          // Game Over
+          gameOver = true;
+          running = false;
+          showMenu('Game Over');
+          // On touch devices show leaderboard when game ends
+          if(isTouchDevice && leaderboard) leaderboard.style.display = 'block';
+          if(!gameOverHandled){
+            gameOverHandled = true;
             setTimeout(()=>{
               try{
                 const name = prompt('Game Over. Ingresa tu nombre para guardar el puntaje:','Anon');
@@ -294,11 +346,36 @@
               }catch(e){ console.error(e); }
             },150);
           }
+        }else{
+          // Respawn level keeping count of destroyed enemies (deadBefore excludes the enemies that collided this frame)
+          restartLevelPreserveKills(deadBefore);
         }
       }
 
-      // level cleared?
-      if(enemies.every(e=>!e.alive)){
+      // If a life was lost this frame, handle respawn or game over
+      if(lifeLostThisFrame){
+        if(lives <= 0){
+          // Game Over
+          gameOver = true;
+          running = false;
+          showMenu('Game Over');
+          if(!gameOverHandled){
+            gameOverHandled = true;
+            setTimeout(()=>{
+              try{
+                const name = prompt('Game Over. Ingresa tu nombre para guardar el puntaje:','Anon');
+                if(name){ saveScore(name, score).then(()=>{ loadTop10(); alert('Puntaje guardado.'); }).catch(err=>{ console.error(err); alert('Error guardando puntaje'); }); }
+              }catch(e){ console.error(e); }
+            },150);
+          }
+        }else{
+          // Respawn level keeping count of destroyed enemies
+          restartLevelPreserveKills();
+        }
+      }
+
+      // level cleared? only check when running
+      if(running && enemies.every(e=>!e.alive)){
         level++; enemySpeed += 0.6; spawnEnemies(3 + Math.min(3, Math.floor(level/2)), 6 + Math.min(4, Math.floor(level/2))); updateHUD();
       }
     }
@@ -350,10 +427,12 @@
     }
 
     // Buttons
-    document.getElementById('btnStart').addEventListener('click', ()=>{ running=true; gameOver=false; hideMenu(); });
+    document.getElementById('btnStart').addEventListener('click', ()=>{ if(gameOver){ reset(); gameOver = false; gameOverHandled = false; running = true; hideMenu(); } else { running=true; gameOver=false; hideMenu(); } });
     document.getElementById('btnRestart').addEventListener('click', ()=>{ reset(); hideMenu(); });
 
     // Start
+    // hide leaderboard on touch devices while playing
+    if(isTouchDevice && leaderboard){ leaderboard.style.display = 'none'; }
     reset();
     requestAnimationFrame(loop);
 
@@ -364,9 +443,7 @@
     canvas.addEventListener('click', ()=>{ canvas.focus(); });
 
     // If touch device, show touch hint
-    if(navigator.maxTouchPoints && navigator.maxTouchPoints>0){
-      if(controls) controls.textContent = 'Toca la pantalla para mover y disparar';
-    }
+    if(isTouchDevice){ if(controls) controls.textContent = 'Toca la pantalla para mover y disparar'; }
 
   })();
   </script>
