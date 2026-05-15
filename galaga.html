@@ -242,6 +242,7 @@
     function update(dt){
       if(!running) return;
       applyInput();
+      let lifeLostThisFrame = false;
 
       // if pointer active, allow auto-fire
       if(pointerActive){ fire(); }
@@ -273,15 +274,27 @@
       }
 
       // enemies reach player or bottom
-      for(let en of enemies){ if(!en.alive) continue; if(en.y + en.h >= player.y){ lives--; updateHUD(); en.alive=false; if(lives<=0){ gameOver=true; running=false; showMenu('Game Over');
-                // prompt to save score
-                setTimeout(()=>{
-                  try{
-                    const name = prompt('Game Over. Ingresa tu nombre para guardar el puntaje:','Anon');
-                    if(name){ saveScore(name, score).then(()=>{ loadTop10(); alert('Puntaje guardado.'); }).catch(err=>{ console.error(err); alert('Error guardando puntaje'); }); }
-                  }catch(e){ console.error(e); }
-                },150);
-            } }
+      for(let en of enemies){
+        if(!en.alive) continue;
+        if(en.y + en.h >= player.y){
+          // only lose one life per frame even if multiple enemies overlap
+          if(!lifeLostThisFrame){
+            lives--;
+            updateHUD();
+            lifeLostThisFrame = true;
+          }
+          en.alive = false;
+          if(lives<=0){
+            gameOver=true; running=false; showMenu('Game Over');
+            // prompt to save score
+            setTimeout(()=>{
+              try{
+                const name = prompt('Game Over. Ingresa tu nombre para guardar el puntaje:','Anon');
+                if(name){ saveScore(name, score).then(()=>{ loadTop10(); alert('Puntaje guardado.'); }).catch(err=>{ console.error(err); alert('Error guardando puntaje'); }); }
+              }catch(e){ console.error(e); }
+            },150);
+          }
+        }
       }
 
       // level cleared?
