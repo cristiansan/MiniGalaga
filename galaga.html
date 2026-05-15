@@ -34,6 +34,10 @@
       <span class="stat">Nivel: <span id="level">1</span></span>
     </div>
     <div id="controls">Mover: ← → · Disparar: SPACE · Pausa: P</div>
+    <div id="leaderboard" style="position:absolute;right:12px;bottom:12px;background:rgba(0,0,0,0.35);padding:8px;border-radius:6px;min-width:180px">
+      <strong>Top 10</strong>
+      <ol id="topList" style="margin:6px 0 0 18px;padding:0;color:#fff"></ol>
+    </div>
     <div id="overlay">
       <div id="menu" role="dialog">
         <h2 id="menuTitle">Presiona INICIAR</h2>
@@ -47,11 +51,68 @@
   </div>
   <footer>Hecho por el asistente · Abre este archivo en tu navegador</footer>
 
-  <script>
+  <script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+  import { getDatabase, ref, push, query, orderByChild, limitToLast, onValue } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+
+  // Firebase configuration (provided)
+  const firebaseConfig = {
+    apiKey: "AIzaSyDxjczbvMPV9mm0BS7nKuZF--6Pi2jiVDI",
+    authDomain: "minigalaga.firebaseapp.com",
+    databaseURL: "https://minigalaga-default-rtdb.firebaseio.com",
+    projectId: "minigalaga",
+    storageBucket: "minagalaga.firebasestorage.app",
+    messagingSenderId: "859917049119",
+    appId: "1:859917049119:web:26142fc99c2d5aef61e42a"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  function saveScore(name, score){
+    const scoresRef = ref(db, 'scores');
+    return push(scoresRef, {name: name, score: score, ts: Date.now()});
+  }
+
+  function loadTop10(){
+    const q = query(ref(db, 'scores'), orderByChild('score'), limitToLast(10));
+    onValue(q, snap => {
+      const list = [];
+      snap.forEach(s => list.push(s.val()));
+      list.sort((a,b)=>b.score - a.score);
+      const el = document.getElementById('topList');
+      if(!el) return;
+      el.innerHTML = '';
+      list.forEach(item => {
+        const li = document.createElement('li');
+        li.textContent = `${item.name} — ${item.score}`;
+        el.appendChild(li);
+      });
+    });
+  }
+
   (function(){
     const canvas = document.getElementById('c');
     const ctx = canvas.getContext('2d');
-    const W = canvas.width, H = canvas.height;
+
+    // We'll maintain logical resolution 800x600 and scale for DPR
+    const LOG_W = 800, LOG_H = 600;
+
+    function adjustCanvasSize(){
+      const rect = canvas.getBoundingClientRect();
+      const cssW = rect.width;
+      const cssH = rect.height || cssW * (LOG_H/LOG_W);
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(cssW * dpr);
+      canvas.height = Math.round(cssH * dpr);
+      canvas.style.width = cssW + 'px';
+      canvas.style.height = cssH + 'px';
+      // scale drawing operations to logical pixels
+      ctx.setTransform(dpr * (canvas.width / (dpr*LOG_W)),0,0,dpr * (canvas.height / (dpr*LOG_H)),0,0);
+    }
+
+    adjustCanvasSize();
+    window.addEventListener('resize', ()=>{ adjustCanvasSize(); });
 
     // HUD
     const elScore = document.getElementById('score');
@@ -59,6 +120,7 @@
     const elLevel = document.getElementById('level');
     const overlay = document.getElementById('overlay');
     const menuTitle = document.getElementById('menuTitle');
+    const controls = document.getElementById('controls');
 
     // Game state
     let keys = {};
@@ -73,15 +135,19 @@
     let enemyDir = 1; // 1 right, -1 left
     let enemyDrop = 20;
     let lastFire = 0;
-    const fireCooldown = 300; // ms
+    const fireCooldown = 200; // ms (slightly faster for touch feel)
 
-    // Player
-    const player = {w:40,h:24,x:W/2-20,y:H-60,speed:6, color:'#39ff14'};
+    // Player (logical coords)
+    const player = {w:40,h:24,x:LOG_W/2-20,y:LOG_H-60,speed:6, color:'#39ff14'};
+
+    // Touch / pointer state
+    let pointerActive = false;
+    let activePointerId = null;
 
     function spawnEnemies(rows=3, cols=8){
       enemies = [];
       const marginX = 60;
-      const spacingX = (W - marginX*2) / cols;
+      const spacingX = (LOG_W - marginX*2) / cols;
       for(let r=0;r<rows;r++){
         for(let c=0;c<cols;c++){
           enemies.push({
@@ -100,6 +166,7 @@
       updateHUD();
       spawnEnemies(3,8);
       showMenu();
+      loadTop10();
     }
 
     function updateHUD(){ elScore.textContent = score; elLives.textContent = lives; elLevel.textContent = level; }
@@ -114,13 +181,13 @@
       bullets.push({x: player.x + player.w/2 - 3, y: player.y-8, w:6,h:10, speed:10});
     }
 
-    // Controls
+    // Controls (keyboard)
     document.addEventListener('keydown', e=>{
       if(e.code==='Space'){ e.preventDefault(); fire(); }
       if(e.code==='KeyP'){ running = !running; if(!running) showMenu('Pausado'); else hideMenu(); }
       keys[e.code]=true;
     });
-    document.addEventListener('keyup', e=>{ keys[e.code]=false; })
+    document.addEventListener('keyup', e=>{ keys[e.code]=false; });
 
     // Support arrow keys and A/D
     function applyInput(){
@@ -128,14 +195,56 @@
       if(keys['ArrowRight']||keys['KeyD']){ player.x += player.speed; }
       // clamp
       if(player.x < 6) player.x = 6;
-      if(player.x + player.w > W-6) player.x = W-6 - player.w;
+      if(player.x + player.w > LOG_W-6) player.x = LOG_W-6 - player.w;
     }
+
+    // Touch / Pointer handlers for mobile/touch devices
+    function getLogicalPos(clientX){
+      const rect = canvas.getBoundingClientRect();
+      const ratio = (clientX - rect.left) / rect.width;
+      return ratio * LOG_W;
+    }
+
+    function onPointerDown(x, id){
+      pointerActive = true; activePointerId = id;
+      const lx = getLogicalPos(x);
+      player.x = lx - player.w/2;
+      // hide keyboard hints on touch devices
+      if(controls) controls.style.display = 'none';
+      // start running if menu visible
+      if(!running){ running = true; hideMenu(); }
+      // immediate fire
+      fire();
+    }
+    function onPointerMove(x, id){
+      if(!pointerActive || id !== activePointerId) return;
+      const lx = getLogicalPos(x);
+      player.x = lx - player.w/2;
+    }
+    function onPointerUp(id){
+      if(id !== activePointerId) return;
+      pointerActive = false; activePointerId = null;
+    }
+
+    // Touch events
+    canvas.addEventListener('touchstart', e=>{ e.preventDefault(); const t = e.changedTouches[0]; onPointerDown(t.clientX, t.identifier); }, {passive:false});
+    canvas.addEventListener('touchmove', e=>{ e.preventDefault(); const t = e.changedTouches[0]; onPointerMove(t.clientX, t.identifier); }, {passive:false});
+    canvas.addEventListener('touchend', e=>{ e.preventDefault(); const t = e.changedTouches[0]; onPointerUp(t.identifier); }, {passive:false});
+    canvas.addEventListener('touchcancel', e=>{ e.preventDefault(); const t = e.changedTouches[0]; onPointerUp(t.identifier); }, {passive:false});
+
+    // Pointer events fallback (stylus/mouse on touch devices)
+    canvas.addEventListener('pointerdown', e=>{ if(e.pointerType==='touch' || e.pointerType==='pen'){ e.preventDefault(); onPointerDown(e.clientX, e.pointerId); } });
+    canvas.addEventListener('pointermove', e=>{ if(e.pointerType==='touch' || e.pointerType==='pen'){ onPointerMove(e.clientX, e.pointerId); } });
+    window.addEventListener('pointerup', e=>{ if(e.pointerType==='touch' || e.pointerType==='pen'){ onPointerUp(e.pointerId); } });
 
     // Game update
     let lastTime = 0;
     function update(dt){
       if(!running) return;
       applyInput();
+
+      // if pointer active, allow auto-fire
+      if(pointerActive){ fire(); }
 
       // move bullets
       for(let i=bullets.length-1;i>=0;i--){
@@ -144,10 +253,10 @@
       }
 
       // move enemies as a group
-      let rightmost = 0, leftmost = W;
+      let rightmost = 0, leftmost = LOG_W;
       enemies.forEach(e=>{ if(!e.alive) return; rightmost = Math.max(rightmost, e.x+e.w); leftmost = Math.min(leftmost, e.x); });
       // change direction if touching edges
-      if(rightmost > W-12) enemyDir = -1, enemies.forEach(e=>e.y += enemyDrop);
+      if(rightmost > LOG_W-12) enemyDir = -1, enemies.forEach(e=>e.y += enemyDrop);
       else if(leftmost < 12) enemyDir = 1, enemies.forEach(e=>e.y += enemyDrop);
 
       enemies.forEach(e=>{ if(!e.alive) return; e.x += enemyDir * enemySpeed; });
@@ -164,7 +273,15 @@
       }
 
       // enemies reach player or bottom
-      for(let en of enemies){ if(!en.alive) continue; if(en.y + en.h >= player.y){ lives--; updateHUD(); en.alive=false; if(lives<=0){ gameOver=true; running=false; showMenu('Game Over'); } }
+      for(let en of enemies){ if(!en.alive) continue; if(en.y + en.h >= player.y){ lives--; updateHUD(); en.alive=false; if(lives<=0){ gameOver=true; running=false; showMenu('Game Over');
+                // prompt to save score
+                setTimeout(()=>{
+                  try{
+                    const name = prompt('Game Over. Ingresa tu nombre para guardar el puntaje:','Anon');
+                    if(name){ saveScore(name, score).then(()=>{ loadTop10(); alert('Puntaje guardado.'); }).catch(err=>{ console.error(err); alert('Error guardando puntaje'); }); }
+                  }catch(e){ console.error(e); }
+                },150);
+            } }
       }
 
       // level cleared?
@@ -177,11 +294,11 @@
 
     // Draw
     function draw(){
-      // background
-      ctx.fillStyle = '#001218'; ctx.fillRect(0,0,W,H);
+      // clear to dark
+      ctx.fillStyle = '#001218'; ctx.fillRect(0,0,LOG_W,LOG_H);
 
-      // stars
-      for(let i=0;i<60;i++){ ctx.fillStyle='rgba(255,255,255,0.03)'; ctx.fillRect((i*37)%W, (i*13)%H, 2,2); }
+      // stars - simple
+      for(let i=0;i<60;i++){ ctx.fillStyle='rgba(255,255,255,0.03)'; ctx.fillRect((i*37)%LOG_W, (i*13)%LOG_H, 2,2); }
 
       // player
       drawPlayer();
@@ -227,11 +344,16 @@
     reset();
     requestAnimationFrame(loop);
 
-    // Resize handling: keep canvas logical size fixed; CSS scales it.
-    window.addEventListener('blur', ()=>{ /* pause on blur? optional */ });
+    // Pause on blur
+    window.addEventListener('blur', ()=>{ /* optional pause */ });
 
-    // Allow click to focus and shoot with keyboard
+    // Focus handling
     canvas.addEventListener('click', ()=>{ canvas.focus(); });
+
+    // If touch device, show touch hint
+    if(navigator.maxTouchPoints && navigator.maxTouchPoints>0){
+      if(controls) controls.textContent = 'Toca la pantalla para mover y disparar';
+    }
 
   })();
   </script>
