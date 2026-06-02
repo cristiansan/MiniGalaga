@@ -10,10 +10,11 @@
     header{padding:12px;text-align:center}
     #gameWrap{position:relative;width:900px;max-width:95vw}
     canvas{display:block;background:linear-gradient(#001022, #001018);width:100%;height:auto;border:4px solid #111;box-shadow:0 8px 30px rgba(0,0,0,.6)}
-    #hud{position:absolute;left:12px;top:12px;background:rgba(0,0,0,.35);padding:8px;border-radius:6px;color:var(--accent)}
+    canvas.hidden{display:none}
+    #hud{position:absolute;left:12px;top:12px;background:rgba(0,0,0,.35);padding:12px;border-radius:6px;color:var(--accent);min-width:240px}
     #hud .stat{margin-right:12px}
     #controls{position:absolute;right:12px;top:12px;background:rgba(0,0,0,.35);padding:8px;border-radius:6px;font-size:14px}
-    #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+    #overlay{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;pointer-events:none;z-index:50;padding-bottom:20px}
     #menu{background:rgba(8,12,23,.9);padding:18px;border-radius:10px;text-align:center;min-width:260px;pointer-events:auto}
     button{background:var(--accent);color:#000;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;font-weight:700}
     button.secondary{background:transparent;color:#fff;border:1px solid #555}
@@ -29,15 +30,20 @@
   <div id="gameWrap">
     <canvas id="c" width="800" height="600"></canvas>
     <div id="hud">
-      <span class="stat">Puntaje: <span id="score">0</span></span>
-      <span class="stat">Vidas: <span id="lives">3</span></span>
-      <span class="stat">Nivel: <span id="level">1</span></span>
-      <div id="fbStatus" style="font-size:12px;color:#9aa;margin-top:6px">Firebase: desconectado</div>
+      <div style="display:flex;justify-content:space-between;width:100%;gap:12px">
+        <div>
+          <div id="score" style="font-size:28px;font-weight:bold;color:var(--accent);line-height:1">0</div>
+        </div>
+      </div>
     </div>
+    <div id="record" style="position:absolute;left:50%;top:12px;transform:translateX(-50%);font-size:24px;font-weight:bold;color:#ff3333;line-height:1.1">— 0</div>
+    <div id="fbStatus" style="position:absolute;right:12px;top:12px;width:16px;height:16px;border-radius:50%;background:#0f0;border:2px solid var(--accent)"></div>
+    <div id="lives" style="position:absolute;left:12px;bottom:12px;font-size:24px">❤️ ❤️ ❤️</div>
     <div id="controls">Mover: ← → · Disparar: SPACE · Pausa: P</div>
-    <div id="leaderboard" style="position:absolute;right:12px;bottom:12px;background:rgba(0,0,0,0.35);padding:8px;border-radius:6px;min-width:180px">
-      <strong>Top 10</strong>
-      <ol id="topList" style="margin:6px 0 0 18px;padding:0;color:#fff"></ol>
+    <div id="levelDisplay" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:64px;font-weight:bold;color:var(--accent);text-shadow:0 0 20px var(--accent);display:none;pointer-events:none;z-index:100">LEVEL 1</div>
+    <div id="leaderboard" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.95);padding:40px;border-radius:6px;min-width:500px;text-align:center;border:3px solid var(--accent);z-index:1;display:none">
+      <strong style="font-size:36px;color:var(--accent);margin-bottom:20px;display:block">TOP 10</strong>
+      <ol id="topList" style="margin:20px 0 0 80px;padding:0;color:#fff;text-align:left;font-size:20px;line-height:2"></ol>
     </div>
     <div id="overlay">
       <div id="menu" role="dialog">
@@ -75,14 +81,14 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     signInAnonymously(auth).then(()=>{
       console.log('Signed in anonymously');
       fbReady = true;
-      const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Firebase: conectado (anónimo)';
+      const s = document.getElementById('fbStatus'); if(s) s.style.background = '#0f0';
     }).catch(err=>{
       console.error('Firebase auth error', err);
-      const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Firebase: desconectado (guardado local)';
+      const s = document.getElementById('fbStatus'); if(s) s.style.background = '#f00';
     });
   } catch(err) {
     console.error('Firebase init error', err);
-    const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Firebase: desconectado (guardado local)';
+    const s = document.getElementById('fbStatus'); if(s) s.style.background = '#f00';
   }
 
   function saveScore(name, score){
@@ -103,8 +109,8 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     
     const scoresRef = ref(db, 'scores');
     return push(scoresRef, {name: name, score: score, ts: Date.now()})
-      .then(r=>{ const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Puntaje guardado'; return r; })
-      .catch(err=>{ console.error('Save error', err); const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Error guardando en Firebase'; });
+      .then(r=>{ return r; })
+      .catch(err=>{ console.error('Save error', err); });
   }
 
   function loadTop10(){
@@ -126,6 +132,12 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       el.appendChild(li);
     });
     
+    // Update HUD with current top score
+    setTimeout(()=>{ 
+      const gameFunc = window.updateGameHUD;
+      if(gameFunc) gameFunc();
+    }, 0);
+    
     // Try to sync with Firebase only if ready
     if(!fbReady) return;
     
@@ -143,6 +155,12 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
           li.textContent = `${item.name} — ${item.score}`;
           el.appendChild(li);
         });
+        
+        // Update HUD with Firebase scores
+        setTimeout(()=>{ 
+          const gameFunc = window.updateGameHUD;
+          if(gameFunc) gameFunc();
+        }, 0);
       });
     } catch(e) {
       console.log('Firebase unavailable, using local scores');
@@ -221,12 +239,27 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     // HUD
     const elScore = document.getElementById('score');
     const elLives = document.getElementById('lives');
-    const elLevel = document.getElementById('level');
+    const elRecord = document.getElementById('record');
+    const levelDisplay = document.getElementById('levelDisplay');
     const overlay = document.getElementById('overlay');
     const menuTitle = document.getElementById('menuTitle');
     const controls = document.getElementById('controls');
     const leaderboard = document.getElementById('leaderboard');
     const isTouchDevice = navigator.maxTouchPoints && navigator.maxTouchPoints>0;
+    
+    // Color palettes for levels (fill, stroke)
+    const colorPalettes = [
+      {fill: '#ffcc33', stroke: '#ff8a33'}, // Level 1: orange/yellow
+      {fill: '#ff8a33', stroke: '#ffcc33'}, // Level 2: inverted
+      {fill: '#33cc33', stroke: '#66ff66'}, // Level 3: green/lime
+      {fill: '#66ff66', stroke: '#33cc33'}, // Level 4: inverted
+      {fill: '#3366ff', stroke: '#66ccff'}, // Level 5: blue/cyan
+      {fill: '#66ccff', stroke: '#3366ff'}, // Level 6: inverted
+      {fill: '#ff33cc', stroke: '#ff66ff'}, // Level 7: magenta/pink
+      {fill: '#ff66ff', stroke: '#ff33cc'}, // Level 8: inverted
+      {fill: '#ffaa33', stroke: '#ffdd66'}, // Level 9: orange/gold
+      {fill: '#ffdd66', stroke: '#ffaa33'}  // Level 10: inverted
+    ];
 
     // Game state
     let keys = {};
@@ -242,6 +275,8 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     let enemyDrop = 20;
     let lastFire = 0;
     const fireCooldown = 200; // ms (slightly faster for touch feel)
+    let levelDisplayTime = 0;
+    let maxScore = 0;
 
     // Player (logical coords)
     const player = {w:40,h:24,x:LOG_W/2-20,y:LOG_H-60,speed:6, color:'#39ff14'};
@@ -288,7 +323,8 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     }
 
     function reset(){
-      bullets=[]; enemies=[]; score=0; lives=3; level=1; enemySpeed=1; enemyDir=1; gameOver=false; running=false; gameOverHandled=false;
+      bullets=[]; enemies=[]; score=0; lives=3; level=1; enemySpeed=1; enemyDir=1; gameOver=false; running=false; gameOverHandled=false; levelDisplayTime = 0;
+      levelDisplay.style.display='none';
       player.x = LOG_W/2 - player.w/2;
       updateHUD();
       spawnEnemies(3,8);
@@ -296,10 +332,34 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       loadTop10();
     }
 
-    function updateHUD(){ elScore.textContent = score; elLives.textContent = lives; elLevel.textContent = level; }
+    function updateHUD(){ 
+      elScore.textContent = score;
+      const hearts = lives > 0 ? '❤️ '.repeat(lives) : '💔';
+      elLives.textContent = hearts;
+      const topItem = document.querySelector('#topList li');
+      const topScore = topItem ? parseInt(topItem.textContent.split('—')[1].trim()) : 0;
+      const topName = topItem ? topItem.textContent.split('—')[0].trim() : '—';
+      maxScore = Math.max(maxScore, topScore, score);
+      const recordName = topScore > 0 ? topName : '—';
+      elRecord.textContent = `${recordName} ${maxScore}`;
+    }
+    
+    function getEnemyColors(){
+      const idx = ((level - 1) % colorPalettes.length);
+      return colorPalettes[idx];
+    }
 
-    function showMenu(msg){ menuTitle.textContent = msg||'Presiona INICIAR'; overlay.style.display='flex'; }
-    function hideMenu(){ overlay.style.display='none'; }
+    function showMenu(msg){ 
+      menuTitle.textContent = msg||'Presiona INICIAR'; 
+      overlay.style.display='flex'; 
+      leaderboard.style.display='block';
+      canvas.classList.add('hidden');
+    }
+    function hideMenu(){ 
+      overlay.style.display='none'; 
+      leaderboard.style.display='none';
+      canvas.classList.remove('hidden');
+    }
 
     function fire(){
       const now = Date.now();
@@ -371,6 +431,13 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     let gameOverHandled = false; // prevents duplicate Game Over prompts
     function update(dt){
       if(!running) return;
+      
+      // Hide level display after 1 second
+      if(levelDisplayTime && Date.now() - levelDisplayTime > 1000){
+        levelDisplay.style.display = 'none';
+        levelDisplayTime = 0;
+      }
+      
       applyInput();
       let lifeLostThisFrame = false;
 
@@ -450,7 +517,13 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
 
       // level cleared? only check when running
       if(running && enemies.every(e=>!e.alive)){
-        level++; enemySpeed += 0.6; spawnEnemies(3 + Math.min(3, Math.floor(level/2)), 6 + Math.min(4, Math.floor(level/2))); updateHUD();
+        level++;
+        if(level > 10) { level = 1; enemySpeed = 1.0; } else { enemySpeed += 0.6; }
+        levelDisplayTime = Date.now();
+        levelDisplay.textContent = `LEVEL ${level}`;
+        levelDisplay.style.display = 'block';
+        spawnEnemies(3 + Math.min(3, Math.floor(level/2)), 6 + Math.min(4, Math.floor(level/2))); 
+        updateHUD();
       }
     }
 
@@ -472,12 +545,13 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       bullets.forEach(b=>{ ctx.fillRect(b.x, b.y, b.w, b.h); });
 
       // enemies
+      const colors = getEnemyColors();
       enemies.forEach((e,idx)=>{
         if(!e.alive) return;
         // simple ship shape
-        ctx.fillStyle = '#ffcc33';
+        ctx.fillStyle = colors.fill;
         ctx.fillRect(e.x, e.y, e.w, e.h);
-        ctx.fillStyle = '#ff8a33';
+        ctx.fillStyle = colors.stroke;
         ctx.fillRect(e.x+6, e.y+4, e.w-12, e.h-8);
       });
 
@@ -501,7 +575,15 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     }
 
     // Buttons
-    document.getElementById('btnStart').addEventListener('click', ()=>{ if(gameOver){ reset(); gameOver = false; gameOverHandled = false; running = true; hideMenu(); } else { running=true; gameOver=false; hideMenu(); } });
+    document.getElementById('btnStart').addEventListener('click', ()=>{ 
+      if(gameOver){ reset(); gameOver = false; gameOverHandled = false; } 
+      running=true; 
+      gameOver=false; 
+      levelDisplayTime = Date.now();
+      levelDisplay.textContent = `LEVEL ${level}`;
+      levelDisplay.style.display = 'block';
+      hideMenu(); 
+    });
     document.getElementById('btnRestart').addEventListener('click', ()=>{ reset(); hideMenu(); });
 
     // Start
@@ -518,6 +600,9 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
 
     // If touch device, show touch hint
     if(isTouchDevice){ if(controls) controls.textContent = 'Toca la pantalla para mover y disparar'; }
+    
+    // Make updateHUD globally accessible for loadTop10
+    window.updateGameHUD = updateHUD;
 
   })();
   </script>
