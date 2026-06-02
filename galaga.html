@@ -81,27 +81,60 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
   });
 
   function saveScore(name, score){
+    // Save locally first
+    let scores = [];
+    try {
+      const stored = localStorage.getItem('galaga_scores');
+      if(stored) scores = JSON.parse(stored);
+    } catch(e) {}
+    scores.push({name: name, score: score, ts: Date.now()});
+    localStorage.setItem('galaga_scores', JSON.stringify(scores));
+    
+    // Try Firebase
     const scoresRef = ref(db, 'scores');
     return push(scoresRef, {name: name, score: score, ts: Date.now()})
       .then(r=>{ const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Puntaje guardado'; return r; })
-      .catch(err=>{ console.error('Save error', err); const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Error guardando puntaje'; throw err; });
+      .catch(err=>{ console.error('Save error', err); const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Sin conexión (guardado local)'; });
   }
 
   function loadTop10(){
-    const q = query(ref(db, 'scores'), orderByChild('score'), limitToLast(10));
-    onValue(q, snap => {
-      const list = [];
-      snap.forEach(s => list.push(s.val()));
-      list.sort((a,b)=>b.score - a.score);
-      const el = document.getElementById('topList');
-      if(!el) return;
-      el.innerHTML = '';
-      list.forEach(item => {
-        const li = document.createElement('li');
-        li.textContent = `${item.name} — ${item.score}`;
-        el.appendChild(li);
-      });
+    // Load from localStorage first
+    let list = [];
+    try {
+      const stored = localStorage.getItem('galaga_scores');
+      if(stored) list = JSON.parse(stored);
+    } catch(e) {}
+    list.sort((a,b)=>b.score - a.score);
+    list = list.slice(0, 10);
+    
+    const el = document.getElementById('topList');
+    if(!el) return;
+    el.innerHTML = '';
+    list.forEach(item => {
+      const li = document.createElement('li');
+      li.textContent = `${item.name} — ${item.score}`;
+      el.appendChild(li);
     });
+    
+    // Try to sync with Firebase
+    try {
+      const q = query(ref(db, 'scores'), orderByChild('score'), limitToLast(10));
+      onValue(q, snap => {
+        const fbList = [];
+        snap.forEach(s => fbList.push(s.val()));
+        fbList.sort((a,b)=>b.score - a.score);
+        fbList = fbList.slice(0, 10);
+        
+        el.innerHTML = '';
+        fbList.forEach(item => {
+          const li = document.createElement('li');
+          li.textContent = `${item.name} — ${item.score}`;
+          el.appendChild(li);
+        });
+      });
+    } catch(e) {
+      console.log('Firebase unavailable, using local scores');
+    }
   }
 
   (function(){
@@ -219,7 +252,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
 
     // Controls (keyboard)
     document.addEventListener('keydown', e=>{
-      if(e.code==='Space'){ e.preventDefault(); fire(); }
+      if(e.code==='Space'){ e.preventDefault(); }
       if(e.code==='KeyP'){ running = !running; if(!running) showMenu('Pausado'); else hideMenu(); }
       keys[e.code]=true;
     });
@@ -229,6 +262,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     function applyInput(){
       if(keys['ArrowLeft']||keys['KeyA']){ player.x -= player.speed; }
       if(keys['ArrowRight']||keys['KeyD']){ player.x += player.speed; }
+      if(keys['Space']){ fire(); }
       // clamp
       if(player.x < 6) player.x = 6;
       if(player.x + player.w > LOG_W-6) player.x = LOG_W-6 - player.w;
@@ -349,28 +383,6 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
         }else{
           // Respawn level keeping count of destroyed enemies (deadBefore excludes the enemies that collided this frame)
           restartLevelPreserveKills(deadBefore);
-        }
-      }
-
-      // If a life was lost this frame, handle respawn or game over
-      if(lifeLostThisFrame){
-        if(lives <= 0){
-          // Game Over
-          gameOver = true;
-          running = false;
-          showMenu('Game Over');
-          if(!gameOverHandled){
-            gameOverHandled = true;
-            setTimeout(()=>{
-              try{
-                const name = prompt('Game Over. Ingresa tu nombre para guardar el puntaje:','Anon');
-                if(name){ saveScore(name, score).then(()=>{ loadTop10(); alert('Puntaje guardado.'); }).catch(err=>{ console.error(err); alert('Error guardando puntaje'); }); }
-              }catch(e){ console.error(e); }
-            },150);
-          }
-        }else{
-          // Respawn level keeping count of destroyed enemies
-          restartLevelPreserveKills();
         }
       }
 
