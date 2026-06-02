@@ -57,7 +57,7 @@
   import { getDatabase, ref, push, query, orderByChild, limitToLast, onValue } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
 
-  // Firebase configuration (provided)
+  let fbReady = false;
   const firebaseConfig = {
     apiKey: "AIzaSyDxjczbvMPV9mm0BS7nKuZF--6Pi2jiVDI",
     authDomain: "minigalaga.firebaseapp.com",
@@ -68,17 +68,22 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     appId: "1:859917049119:web:26142fc99c2d5aef61e42a"
   };
 
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
-  // Initialize auth (anonymous) so DB writes can be secured by auth != null rules
-  const auth = getAuth(app);
-  signInAnonymously(auth).then(()=>{
-    console.log('Signed in anonymously');
-    const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Firebase: conectado (anónimo)';
-  }).catch(err=>{
-    console.error('Firebase auth error', err);
-    const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Firebase auth error';
-  });
+  try {
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
+    signInAnonymously(auth).then(()=>{
+      console.log('Signed in anonymously');
+      fbReady = true;
+      const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Firebase: conectado (anónimo)';
+    }).catch(err=>{
+      console.error('Firebase auth error', err);
+      const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Firebase: desconectado (guardado local)';
+    });
+  } catch(err) {
+    console.error('Firebase init error', err);
+    const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Firebase: desconectado (guardado local)';
+  }
 
   function saveScore(name, score){
     // Save locally first
@@ -90,11 +95,16 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     scores.push({name: name, score: score, ts: Date.now()});
     localStorage.setItem('galaga_scores', JSON.stringify(scores));
     
-    // Try Firebase
+    // Try Firebase only if ready
+    if(!fbReady) {
+      const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Sin conexión (guardado local)';
+      return Promise.resolve();
+    }
+    
     const scoresRef = ref(db, 'scores');
     return push(scoresRef, {name: name, score: score, ts: Date.now()})
       .then(r=>{ const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Puntaje guardado'; return r; })
-      .catch(err=>{ console.error('Save error', err); const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Sin conexión (guardado local)'; });
+      .catch(err=>{ console.error('Save error', err); const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Error guardando en Firebase'; });
   }
 
   function loadTop10(){
@@ -116,11 +126,13 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       el.appendChild(li);
     });
     
-    // Try to sync with Firebase
+    // Try to sync with Firebase only if ready
+    if(!fbReady) return;
+    
     try {
       const q = query(ref(db, 'scores'), orderByChild('score'), limitToLast(10));
       onValue(q, snap => {
-        const fbList = [];
+        let fbList = [];
         snap.forEach(s => fbList.push(s.val()));
         fbList.sort((a,b)=>b.score - a.score);
         fbList = fbList.slice(0, 10);
@@ -143,6 +155,52 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
 
     // We'll maintain logical resolution 800x600 and scale for DPR
     const LOG_W = 800, LOG_H = 600;
+    
+    // Audio context
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    function playSound(freq, duration, type='sine'){
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = type;
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + duration);
+    }
+    
+    function soundFire(){
+      playSound(500, 0.12, 'sine');
+    }
+    
+    function soundImpact(){
+      playSound(400, 0.15, 'sine');
+      playSound(250, 0.2, 'sine');
+    }
+    
+    function soundExplosion(){
+      for(let i=0; i<5; i++){
+        setTimeout(()=>{ playSound(300 - i*50, 0.1, 'triangle'); }, i*30);
+      }
+    }
+    
+    function soundGameOver(){
+      // "ti ru ru ruuu" - tipo Pac-Man
+      const notes = [
+        {f: 800, d: 0.1},
+        {f: 600, d: 0.1},
+        {f: 600, d: 0.1},
+        {f: 400, d: 0.3}
+      ];
+      let time = 0;
+      notes.forEach(n => {
+        setTimeout(()=>{ playSound(n.f, n.d, 'sine'); }, time);
+        time += n.d * 1000 + 50;
+      });
+    }
 
     function adjustCanvasSize(){
       const rect = canvas.getBoundingClientRect();
@@ -248,6 +306,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       if(now - lastFire < fireCooldown) return;
       lastFire = now;
       bullets.push({x: player.x + player.w/2 - 3, y: player.y-8, w:6,h:10, speed:10});
+      soundFire();
     }
 
     // Controls (keyboard)
@@ -339,6 +398,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
         for(let j=0;j<enemies.length;j++){
           const en = enemies[j]; if(!en.alive) continue;
           if(rectIntersect(b, en)){
+            soundImpact();
             en.alive = false; bullets.splice(i,1); score += 100; updateHUD(); break;
           }
         }
@@ -353,6 +413,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
         if(en.y + en.h >= player.y){
           // only flag a life loss once per frame even if multiple enemies overlap
           if(!lifeLostThisFrame){
+            soundExplosion();
             lives = Math.max(0, lives - 1);
             updateHUD();
             lifeLostThisFrame = true;
@@ -368,6 +429,7 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
           // Game Over
           gameOver = true;
           running = false;
+          soundGameOver();
           showMenu('Game Over');
           // On touch devices show leaderboard when game ends
           if(isTouchDevice && leaderboard) leaderboard.style.display = 'block';
