@@ -14,7 +14,7 @@
     #hud{position:absolute;left:12px;top:12px;background:rgba(0,0,0,.35);padding:12px;border-radius:6px;color:var(--accent);min-width:240px}
     #hud .stat{margin-right:12px}
     #controls{position:absolute;right:12px;top:12px;background:rgba(0,0,0,.35);padding:8px;border-radius:6px;font-size:14px}
-    #overlay{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;pointer-events:none;z-index:50;padding-bottom:20px}
+    #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:50}
     #menu{background:rgba(8,12,23,.9);padding:18px;border-radius:10px;text-align:center;min-width:260px;pointer-events:auto}
     button{background:var(--accent);color:#000;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;font-weight:700}
     button.secondary{background:transparent;color:#fff;border:1px solid #555}
@@ -349,16 +349,14 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
       return colorPalettes[idx];
     }
 
-    function showMenu(msg){ 
-      menuTitle.textContent = msg||'Presiona INICIAR'; 
-      overlay.style.display='flex'; 
+    function showMenu(msg){
+      menuTitle.textContent = msg||'Presiona INICIAR';
+      overlay.style.display='flex';
       leaderboard.style.display='block';
-      canvas.classList.add('hidden');
     }
-    function hideMenu(){ 
-      overlay.style.display='none'; 
+    function hideMenu(){
+      overlay.style.display='none';
       leaderboard.style.display='none';
-      canvas.classList.remove('hidden');
     }
 
     function fire(){
