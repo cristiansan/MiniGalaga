@@ -5,50 +5,50 @@
   <title>Galaga - Juego</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
-    :root{--bg:#06071a;--panel:#0b1533;--accent:#39ff14;--danger:#ff4666}
+    :root{--bg:#06071a;--accent:#39ff14}
+    *{box-sizing:border-box}
     body{margin:0;background:linear-gradient(180deg,var(--bg),#000);color:#fff;font-family:Consolas,monospace,Arial;display:flex;flex-direction:column;align-items:center}
-    header{padding:12px;text-align:center}
+    header{padding:8px 16px;text-align:center;width:min(900px,95vw);position:relative}
+    header h1{margin:0 0 2px;font-size:clamp(18px,4vw,28px)}
+    header p{margin:0;font-size:clamp(10px,1.6vw,13px);color:#9aa}
     #gameWrap{position:relative;width:900px;max-width:95vw}
-    canvas{display:block;background:linear-gradient(#001022, #001018);width:100%;height:auto;border:4px solid #111;box-shadow:0 8px 30px rgba(0,0,0,.6)}
-    canvas.hidden{display:none}
-    #hud{position:absolute;left:12px;top:12px;background:rgba(0,0,0,.35);padding:12px;border-radius:6px;color:var(--accent);min-width:240px}
-    #hud .stat{margin-right:12px}
-    #controls{position:absolute;right:12px;top:12px;background:rgba(0,0,0,.35);padding:8px;border-radius:6px;font-size:14px}
+    canvas{display:block;background:#001018;width:100%;height:auto;border:4px solid #111;box-shadow:0 8px 30px rgba(0,0,0,.6)}
     #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:50}
-    #menu{background:rgba(8,12,23,.9);padding:18px;border-radius:10px;text-align:center;min-width:260px;pointer-events:auto}
-    button{background:var(--accent);color:#000;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;font-weight:700}
+    #menu{background:rgba(8,12,23,.93);padding:clamp(12px,3vw,20px);border-radius:10px;text-align:center;width:min(340px,86vw);pointer-events:auto;border:1px solid #1a2a1a}
+    #menu h2{margin:0 0 6px;font-size:clamp(15px,3vw,22px)}
+    #menu p{margin:0 0 10px;font-size:clamp(11px,1.8vw,14px);color:#bbb}
+    #shipSelect{margin-top:10px;border-top:1px solid #1a3a1a;padding-top:10px}
+    .sel-label{font-size:10px;color:#778;letter-spacing:2px;margin-bottom:6px;text-transform:uppercase}
+    #shipOptions{display:flex;gap:8px;justify-content:center}
+    #shipOptions canvas{cursor:pointer;border-radius:6px;background:#001018;border:2px solid #334;transition:border-color .15s,transform .1s}
+    #shipOptions canvas:hover{border-color:#667;transform:scale(1.08)}
+    #shipOptions canvas.sel{border-color:var(--accent);box-shadow:0 0 8px rgba(57,255,20,.4)}
+    button{background:var(--accent);color:#000;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:700;font-size:clamp(12px,2vw,15px)}
     button.secondary{background:transparent;color:#fff;border:1px solid #555}
-    small{color:#bbb}
-    footer{margin:14px;color:#9aa}
+    #leaderboard{position:absolute;inset:0;background:rgba(0,6,24,0.88);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:1;padding:16px}
+    #leaderboard strong{font-size:clamp(20px,4vw,40px);color:var(--accent);margin-bottom:clamp(6px,1.5vw,14px);display:block;letter-spacing:clamp(2px,0.5vw,4px);text-shadow:0 0 20px var(--accent)}
+    #topList{margin:0;padding-left:clamp(24px,5vw,60px);color:#fff;text-align:left;font-size:clamp(12px,2vw,22px);line-height:2}
   </style>
 </head>
 <body>
   <header>
     <h1>Mini Galaga</h1>
-    <p><small>Flechas izquierda/derecha para mover, barra espaciadora para disparar</small></p>
+    <p id="controlsHint">← → para mover · Espacio para disparar · P para pausar</p>
   </header>
   <div id="gameWrap">
     <canvas id="c" width="800" height="600"></canvas>
-    <div id="hud">
-      <div style="display:flex;justify-content:space-between;width:100%;gap:12px">
-        <div>
-          <div id="score" style="font-size:28px;font-weight:bold;color:var(--accent);line-height:1">0</div>
-        </div>
-      </div>
-    </div>
-    <div id="record" style="position:absolute;left:50%;top:12px;transform:translateX(-50%);font-size:24px;font-weight:bold;color:#ff3333;line-height:1.1">— 0</div>
-    <div id="fbStatus" style="position:absolute;right:12px;top:12px;width:16px;height:16px;border-radius:50%;background:#0f0;border:2px solid var(--accent)"></div>
-    <div id="lives" style="position:absolute;left:12px;bottom:12px;font-size:24px">❤️ ❤️ ❤️</div>
-    <div id="controls">Mover: ← → · Disparar: SPACE · Pausa: P</div>
-    <div id="levelDisplay" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:64px;font-weight:bold;color:var(--accent);text-shadow:0 0 20px var(--accent);display:none;pointer-events:none;z-index:100">LEVEL 1</div>
-    <div id="leaderboard" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.95);padding:40px;border-radius:6px;min-width:500px;text-align:center;border:3px solid var(--accent);z-index:1;display:none">
-      <strong style="font-size:36px;color:var(--accent);margin-bottom:20px;display:block">TOP 10</strong>
-      <ol id="topList" style="margin:20px 0 0 80px;padding:0;color:#fff;text-align:left;font-size:20px;line-height:2"></ol>
+    <div id="leaderboard">
+      <strong>TOP 10</strong>
+      <ol id="topList"></ol>
     </div>
     <div id="overlay">
       <div id="menu" role="dialog">
         <h2 id="menuTitle">Presiona INICIAR</h2>
         <p id="menuText">Una nave, dispara a las naves enemigas. Buena suerte.</p>
+        <div id="shipSelect">
+          <div class="sel-label">Elige tu nave</div>
+          <div id="shipOptions"></div>
+        </div>
         <div style="margin-top:12px">
           <button id="btnStart">Iniciar</button>
           <button id="btnRestart" class="secondary" style="margin-left:8px">Reiniciar</button>
@@ -57,11 +57,10 @@
     </div>
   </div>
 
-
   <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
   import { getDatabase, ref, push, query, orderByChild, limitToLast, onValue } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
+  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
 
   let fbReady = false;
   const firebaseConfig = {
@@ -73,534 +72,479 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
     messagingSenderId: "859917049119",
     appId: "1:859917049119:web:26142fc99c2d5aef61e42a"
   };
-
   try {
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const auth = getAuth(app);
-    signInAnonymously(auth).then(()=>{
-      console.log('Signed in anonymously');
-      fbReady = true;
-      const s = document.getElementById('fbStatus'); if(s) s.style.background = '#0f0';
-    }).catch(err=>{
-      console.error('Firebase auth error', err);
-      const s = document.getElementById('fbStatus'); if(s) s.style.background = '#f00';
-    });
-  } catch(err) {
-    console.error('Firebase init error', err);
-    const s = document.getElementById('fbStatus'); if(s) s.style.background = '#f00';
-  }
+    signInAnonymously(auth)
+      .then(()=>{ fbReady=true; console.log('Firebase OK'); })
+      .catch(err=>console.error('Firebase auth',err));
+  } catch(e){ console.error('Firebase init',e); }
 
-  function saveScore(name, score){
-    // Save locally first
-    let scores = [];
-    try {
-      const stored = localStorage.getItem('galaga_scores');
-      if(stored) scores = JSON.parse(stored);
-    } catch(e) {}
-    scores.push({name: name, score: score, ts: Date.now()});
-    localStorage.setItem('galaga_scores', JSON.stringify(scores));
-    
-    // Try Firebase only if ready
-    if(!fbReady) {
-      const s = document.getElementById('fbStatus'); if(s) s.textContent = 'Sin conexión (guardado local)';
-      return Promise.resolve();
-    }
-    
-    const scoresRef = ref(db, 'scores');
-    return push(scoresRef, {name: name, score: score, ts: Date.now()})
-      .then(r=>{ return r; })
-      .catch(err=>{ console.error('Save error', err); });
+  function saveScore(name,score){
+    let scores=[];
+    try{ const s=localStorage.getItem('galaga_scores'); if(s) scores=JSON.parse(s); }catch(e){}
+    scores.push({name,score,ts:Date.now()});
+    localStorage.setItem('galaga_scores',JSON.stringify(scores));
+    if(!fbReady) return Promise.resolve();
+    return push(ref(db,'scores'),{name,score,ts:Date.now()}).catch(e=>console.error('Save',e));
   }
 
   function loadTop10(){
-    // Load from localStorage first
-    let list = [];
-    try {
-      const stored = localStorage.getItem('galaga_scores');
-      if(stored) list = JSON.parse(stored);
-    } catch(e) {}
-    list.sort((a,b)=>b.score - a.score);
-    list = list.slice(0, 10);
-    
-    const el = document.getElementById('topList');
-    if(!el) return;
-    el.innerHTML = '';
-    list.forEach(item => {
-      const li = document.createElement('li');
-      li.textContent = `${item.name} — ${item.score}`;
-      el.appendChild(li);
-    });
-    
-    // Update HUD with current top score
-    setTimeout(()=>{ 
-      const gameFunc = window.updateGameHUD;
-      if(gameFunc) gameFunc();
-    }, 0);
-    
-    // Try to sync with Firebase only if ready
+    let list=[];
+    try{ const s=localStorage.getItem('galaga_scores'); if(s) list=JSON.parse(s); }catch(e){}
+    list.sort((a,b)=>b.score-a.score); list=list.slice(0,10);
+    const el=document.getElementById('topList'); if(!el) return;
+    el.innerHTML='';
+    list.forEach(it=>{ const li=document.createElement('li'); li.textContent=`${it.name} — ${it.score}`; el.appendChild(li); });
+    setTimeout(()=>{ if(window.updateGameHUD) window.updateGameHUD(); },0);
     if(!fbReady) return;
-    
-    try {
-      const q = query(ref(db, 'scores'), orderByChild('score'), limitToLast(10));
-      onValue(q, snap => {
-        let fbList = [];
-        snap.forEach(s => fbList.push(s.val()));
-        fbList.sort((a,b)=>b.score - a.score);
-        fbList = fbList.slice(0, 10);
-        
-        el.innerHTML = '';
-        fbList.forEach(item => {
-          const li = document.createElement('li');
-          li.textContent = `${item.name} — ${item.score}`;
-          el.appendChild(li);
-        });
-        
-        // Update HUD with Firebase scores
-        setTimeout(()=>{ 
-          const gameFunc = window.updateGameHUD;
-          if(gameFunc) gameFunc();
-        }, 0);
+    try{
+      const q=query(ref(db,'scores'),orderByChild('score'),limitToLast(10));
+      onValue(q,snap=>{
+        let fl=[]; snap.forEach(s=>fl.push(s.val())); fl.sort((a,b)=>b.score-a.score); fl=fl.slice(0,10);
+        el.innerHTML='';
+        fl.forEach(it=>{ const li=document.createElement('li'); li.textContent=`${it.name} — ${it.score}`; el.appendChild(li); });
+        setTimeout(()=>{ if(window.updateGameHUD) window.updateGameHUD(); },0);
       });
-    } catch(e) {
-      console.log('Firebase unavailable, using local scores');
-    }
+    }catch(e){ console.log('Firebase unavailable'); }
   }
 
+  // ─────────────────────────────────────────────────────────────
   (function(){
     const canvas = document.getElementById('c');
-    const ctx = canvas.getContext('2d');
+    const ctx    = canvas.getContext('2d');
+    const LOG_W  = 800, LOG_H = 600;
 
-    // We'll maintain logical resolution 800x600 and scale for DPR
-    const LOG_W = 800, LOG_H = 600;
-    
-    // Audio context
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
-    function playSound(freq, duration, type='sine'){
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.type = type;
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-      osc.start(audioCtx.currentTime);
-      osc.stop(audioCtx.currentTime + duration);
+    // ── Audio ────────────────────────────────────────────────────
+    const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    function playSound(f,d,type='sine'){
+      const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      o.type=type; o.frequency.value=f;
+      g.gain.setValueAtTime(0.1,audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+d);
+      o.start(audioCtx.currentTime); o.stop(audioCtx.currentTime+d);
     }
-    
-    function soundFire(){
-      playSound(500, 0.12, 'sine');
+    const soundFire     = ()=>playSound(500,.12);
+    const soundImpact   = ()=>{ playSound(400,.15); playSound(250,.2); };
+    const soundExplosion= ()=>{ for(let i=0;i<5;i++) setTimeout(()=>playSound(300-i*50,.1,'triangle'),i*30); };
+    const soundGameOver = ()=>{
+      [{f:800,d:.1},{f:600,d:.1},{f:600,d:.1},{f:400,d:.3}].reduce((t,n)=>{
+        setTimeout(()=>playSound(n.f,n.d),t); return t+n.d*1000+50;
+      },0);
+    };
+
+    // ── Canvas resize ────────────────────────────────────────────
+    function adjustCanvasSize(){
+      const rect=canvas.getBoundingClientRect();
+      const cw=rect.width, ch=rect.height||cw*(LOG_H/LOG_W);
+      const dpr=window.devicePixelRatio||1;
+      canvas.width=Math.round(cw*dpr); canvas.height=Math.round(ch*dpr);
+      canvas.style.width=cw+'px'; canvas.style.height=ch+'px';
+      ctx.setTransform(dpr*(canvas.width/(dpr*LOG_W)),0,0,dpr*(canvas.height/(dpr*LOG_H)),0,0);
     }
-    
-    function soundImpact(){
-      playSound(400, 0.15, 'sine');
-      playSound(250, 0.2, 'sine');
+    adjustCanvasSize();
+    window.addEventListener('resize',adjustCanvasSize);
+
+    // ── Pixel-art sprites ────────────────────────────────────────
+    // 0=transparent  1=main color  2=highlight/accent
+    const PSPRITES = [
+      // Ship 0: Classic fighter
+      { s:5, d:[
+        [0,0,0,1,1,0,0,0],
+        [0,0,1,2,2,1,0,0],
+        [0,1,1,1,1,1,1,0],
+        [1,1,0,1,1,0,1,1],
+        [1,0,0,1,1,0,0,1]
+      ]},
+      // Ship 1: Heavy gunship
+      { s:5, d:[
+        [0,0,0,1,1,0,0,0],
+        [0,1,1,1,1,1,1,0],
+        [1,1,2,1,1,2,1,1],
+        [0,1,1,1,1,1,1,0],
+        [0,1,0,1,1,0,1,0]
+      ]},
+      // Ship 2: Delta interceptor
+      { s:5, d:[
+        [0,0,0,0,1,0,0,0],
+        [0,0,0,1,1,1,0,0],
+        [0,1,0,2,1,2,0,1],
+        [1,1,1,1,1,1,1,1],
+        [1,0,1,1,1,1,0,1]
+      ]}
+    ];
+
+    const ESPRITES = [
+      // Enemy 0: Wasp (row 0)
+      { s:4, d:[
+        [0,1,0,0,0,0,0,1,0],
+        [1,0,1,1,1,1,1,0,1],
+        [1,1,1,2,1,2,1,1,1],
+        [0,1,1,1,1,1,1,1,0],
+        [0,0,1,0,1,0,1,0,0]
+      ]},
+      // Enemy 1: Butterfly (row 1)
+      { s:4, d:[
+        [1,0,0,1,0,1,0,0,1],
+        [1,1,1,1,1,1,1,1,1],
+        [0,2,1,1,1,1,1,2,0],
+        [1,1,0,1,0,1,0,1,1],
+        [0,0,1,0,1,0,1,0,0]
+      ]},
+      // Enemy 2: Drone (row 2+)
+      { s:4, d:[
+        [0,0,1,0,0,0,1,0,0],
+        [0,1,1,1,1,1,1,1,0],
+        [1,1,2,1,0,1,2,1,1],
+        [0,1,0,1,1,1,0,1,0],
+        [1,0,0,0,1,0,0,0,1]
+      ]}
+    ];
+
+    // Render a sprite at (ox,oy) using c1/c2 colors
+    function renderSprite(tctx, spr, ox, oy, c1, c2){
+      spr.d.forEach((row,ry)=>row.forEach((cell,cx)=>{
+        if(!cell) return;
+        tctx.fillStyle = cell===2 ? c2 : c1;
+        tctx.fillRect(ox+cx*spr.s, oy+ry*spr.s, spr.s, spr.s);
+      }));
     }
-    
-    function soundExplosion(){
-      for(let i=0; i<5; i++){
-        setTimeout(()=>{ playSound(300 - i*50, 0.1, 'triangle'); }, i*30);
-      }
-    }
-    
-    function soundGameOver(){
-      // "ti ru ru ruuu" - tipo Pac-Man
-      const notes = [
-        {f: 800, d: 0.1},
-        {f: 600, d: 0.1},
-        {f: 600, d: 0.1},
-        {f: 400, d: 0.3}
-      ];
-      let time = 0;
-      notes.forEach(n => {
-        setTimeout(()=>{ playSound(n.f, n.d, 'sine'); }, time);
-        time += n.d * 1000 + 50;
+
+    let selectedShip = parseInt(localStorage.getItem('galaga_ship')||'0');
+
+    function setupShipSelector(){
+      const cont = document.getElementById('shipOptions'); if(!cont) return;
+      cont.innerHTML='';
+      PSPRITES.forEach((spr,idx)=>{
+        const cvs=document.createElement('canvas');
+        cvs.width=58; cvs.height=50;
+        if(idx===selectedShip) cvs.classList.add('sel');
+        const sc=cvs.getContext('2d');
+        const sw=spr.d[0].length*spr.s, sh=spr.d.length*spr.s;
+        renderSprite(sc,spr,Math.floor((58-sw)/2),Math.floor((50-sh)/2),'#39ff14','#bbff88');
+        cvs.addEventListener('click',()=>{
+          selectedShip=idx;
+          localStorage.setItem('galaga_ship',idx);
+          cont.querySelectorAll('canvas').forEach((c,i)=>c.classList.toggle('sel',i===idx));
+        });
+        cont.appendChild(cvs);
       });
     }
 
-    function adjustCanvasSize(){
-      const rect = canvas.getBoundingClientRect();
-      const cssW = rect.width;
-      const cssH = rect.height || cssW * (LOG_H/LOG_W);
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = Math.round(cssW * dpr);
-      canvas.height = Math.round(cssH * dpr);
-      canvas.style.width = cssW + 'px';
-      canvas.style.height = cssH + 'px';
-      // scale drawing operations to logical pixels
-      ctx.setTransform(dpr * (canvas.width / (dpr*LOG_W)),0,0,dpr * (canvas.height / (dpr*LOG_H)),0,0);
+    // ── Particle explosions ──────────────────────────────────────
+    let particles = [];
+
+    function spawnExplosion(cx, cy, c1, c2='#ffffff', big=false){
+      const n=big?22:14, spd=big?1.4:0.9;
+      for(let i=0;i<n;i++){
+        const a=(Math.PI*2/n)*i+(Math.random()-.5)*.5;
+        const v=spd+Math.random()*2.5;
+        particles.push({
+          x:cx,y:cy, vx:Math.cos(a)*v, vy:Math.sin(a)*v,
+          life:1, decay:.028+Math.random()*.032,
+          color: i%4===0?'#fff': i%3===0?c2:c1,
+          size:(big?3:2)+Math.random()*3
+        });
+      }
+      // Expanding ring flash
+      particles.push({x:cx,y:cy,vx:0,vy:0,life:1,decay:.2,color:'#fff',ring:true,rmax:big?32:20});
     }
 
-    adjustCanvasSize();
-    window.addEventListener('resize', ()=>{ adjustCanvasSize(); });
+    function stepParticles(){
+      for(let i=particles.length-1;i>=0;i--){
+        const p=particles[i];
+        p.x+=p.vx; p.y+=p.vy; p.vy+=.05; p.life-=p.decay;
+        if(p.life<=0) particles.splice(i,1);
+      }
+    }
 
-    // HUD
-    const elScore = document.getElementById('score');
-    const elLives = document.getElementById('lives');
-    const elRecord = document.getElementById('record');
-    const levelDisplay = document.getElementById('levelDisplay');
-    const overlay = document.getElementById('overlay');
-    const menuTitle = document.getElementById('menuTitle');
-    const controls = document.getElementById('controls');
-    const leaderboard = document.getElementById('leaderboard');
-    const isTouchDevice = navigator.maxTouchPoints && navigator.maxTouchPoints>0;
-    
-    // Color palettes for levels (fill, stroke)
-    const colorPalettes = [
-      {fill: '#ffcc33', stroke: '#ff8a33'}, // Level 1: orange/yellow
-      {fill: '#ff8a33', stroke: '#ffcc33'}, // Level 2: inverted
-      {fill: '#33cc33', stroke: '#66ff66'}, // Level 3: green/lime
-      {fill: '#66ff66', stroke: '#33cc33'}, // Level 4: inverted
-      {fill: '#3366ff', stroke: '#66ccff'}, // Level 5: blue/cyan
-      {fill: '#66ccff', stroke: '#3366ff'}, // Level 6: inverted
-      {fill: '#ff33cc', stroke: '#ff66ff'}, // Level 7: magenta/pink
-      {fill: '#ff66ff', stroke: '#ff33cc'}, // Level 8: inverted
-      {fill: '#ffaa33', stroke: '#ffdd66'}, // Level 9: orange/gold
-      {fill: '#ffdd66', stroke: '#ffaa33'}  // Level 10: inverted
-    ];
-
-    // Game state
-    let keys = {};
-    let bullets = [];
-    let enemies = [];
-    let score = 0;
-    let lives = 3;
-    let level = 1;
-    let gameOver = false;
-    let running = false;
-    let enemySpeed = 1.0;
-    let enemyDir = 1; // 1 right, -1 left
-    let enemyDrop = 20;
-    let lastFire = 0;
-    const fireCooldown = 200; // ms (slightly faster for touch feel)
-    let levelDisplayTime = 0;
-    let maxScore = 0;
-
-    // Player (logical coords)
-    const player = {w:40,h:24,x:LOG_W/2-20,y:LOG_H-60,speed:6, color:'#39ff14'};
-
-    // Touch / pointer state
-    let pointerActive = false;
-    let activePointerId = null;
-
-    function spawnEnemies(rows=3, cols=8){
-      enemies = [];
-      const marginX = 60;
-      const spacingX = (LOG_W - marginX*2) / cols;
-      for(let r=0;r<rows;r++){
-        for(let c=0;c<cols;c++){
-          enemies.push({
-            x: marginX + c*spacingX + 8,
-            y: 60 + r*44,
-            w:36,h:22,
-            alive:true,
-            offset: (r+c)%2
-          });
+    function drawParticles(){
+      ctx.save();
+      particles.forEach(p=>{
+        ctx.globalAlpha=Math.max(0,p.life);
+        if(p.ring){
+          ctx.strokeStyle=p.color; ctx.lineWidth=2;
+          ctx.beginPath(); ctx.arc(p.x,p.y,p.rmax*(1-p.life+.05),0,Math.PI*2); ctx.stroke();
+        } else {
+          ctx.fillStyle=p.color;
+          ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);
         }
-      }
+      });
+      ctx.globalAlpha=1; ctx.restore();
     }
 
-    // Restart current level but preserve how many enemies were already destroyed.
-    // Accept deadCount param (number of enemies already destroyed BEFORE the death event)
-    function restartLevelPreserveKills(deadCount){
-      if(typeof deadCount !== 'number') deadCount = enemies.filter(e => !e.alive).length;
-      // compute rows/cols used for this level (same logic as when spawning on level-up)
-      const rows = 3 + Math.min(3, Math.floor(level/2));
-      const cols = 6 + Math.min(4, Math.floor(level/2));
-      // recreate the enemy grid for this level
-      spawnEnemies(rows, cols);
-      // mark deadCount enemies as dead so the level restarts with the same number of destroyed blocks
-      for(let i=0;i<deadCount && i<enemies.length;i++){
-        enemies[i].alive = false;
-      }
-      // reset enemy movement direction to default
-      enemyDir = 1;
-      // clear bullets and reset player position
-      bullets = [];
-      player.x = LOG_W/2 - player.w/2;
+    // ── DOM handles ──────────────────────────────────────────────
+    const overlay     = document.getElementById('overlay');
+    const menuTitle   = document.getElementById('menuTitle');
+    const leaderboard = document.getElementById('leaderboard');
+    const shipSelect  = document.getElementById('shipSelect');
+    const controlsHint= document.getElementById('controlsHint');
+    const isTouchDevice = navigator.maxTouchPoints > 0;
+
+    // ── Level color palettes ─────────────────────────────────────
+    const colorPalettes = [
+      {fill:'#ffcc33',stroke:'#ff8a33'},{fill:'#ff8a33',stroke:'#ffcc33'},
+      {fill:'#33cc33',stroke:'#66ff66'},{fill:'#66ff66',stroke:'#33cc33'},
+      {fill:'#3366ff',stroke:'#66ccff'},{fill:'#66ccff',stroke:'#3366ff'},
+      {fill:'#ff33cc',stroke:'#ff66ff'},{fill:'#ff66ff',stroke:'#ff33cc'},
+      {fill:'#ffaa33',stroke:'#ffdd66'},{fill:'#ffdd66',stroke:'#ffaa33'}
+    ];
+    const getEnemyColors = ()=>colorPalettes[(level-1)%colorPalettes.length];
+
+    // ── Game state ───────────────────────────────────────────────
+    let keys={}, bullets=[], enemies=[], score=0, lives=3, level=1;
+    let gameOver=false, running=false, gameOverHandled=false;
+    let enemySpeed=1.0, enemyDir=1, enemyDrop=20;
+    let lastFire=0, levelDisplayTime=0;
+    let maxScore=0, maxName='—';
+    const fireCooldown=200;
+    const player={w:40,h:24,x:LOG_W/2-20,y:LOG_H-60,speed:6,color:'#39ff14'};
+    let pointerActive=false, activePointerId=null;
+
+    function spawnEnemies(rows=3,cols=8){
+      enemies=[];
+      const mx=60, sx=(LOG_W-mx*2)/cols;
+      for(let r=0;r<rows;r++) for(let c=0;c<cols;c++)
+        enemies.push({x:mx+c*sx+8,y:60+r*44,w:36,h:22,alive:true,type:r%ESPRITES.length});
+    }
+
+    function restartLevelPreserveKills(dc){
+      if(typeof dc!=='number') dc=enemies.filter(e=>!e.alive).length;
+      const rows=3+Math.min(3,Math.floor(level/2)),cols=6+Math.min(4,Math.floor(level/2));
+      spawnEnemies(rows,cols);
+      for(let i=0;i<dc&&i<enemies.length;i++) enemies[i].alive=false;
+      enemyDir=1; bullets=[]; player.x=LOG_W/2-player.w/2;
     }
 
     function reset(){
-      bullets=[]; enemies=[]; score=0; lives=3; level=1; enemySpeed=1; enemyDir=1; gameOver=false; running=false; gameOverHandled=false; levelDisplayTime = 0;
-      levelDisplay.style.display='none';
-      player.x = LOG_W/2 - player.w/2;
-      updateHUD();
-      spawnEnemies(3,8);
-      showMenu();
-      loadTop10();
+      bullets=[]; enemies=[]; score=0; lives=3; level=1;
+      enemySpeed=1; enemyDir=1; gameOver=false; running=false; gameOverHandled=false;
+      levelDisplayTime=0; particles=[];
+      player.x=LOG_W/2-player.w/2;
+      updateHUD(); spawnEnemies(3,8); showMenu(); loadTop10();
     }
 
-    function updateHUD(){ 
-      elScore.textContent = score;
-      const hearts = lives > 0 ? '❤️ '.repeat(lives) : '💔';
-      elLives.textContent = hearts;
-      const topItem = document.querySelector('#topList li');
-      const topScore = topItem ? parseInt(topItem.textContent.split('—')[1].trim()) : 0;
-      const topName = topItem ? topItem.textContent.split('—')[0].trim() : '—';
-      maxScore = Math.max(maxScore, topScore, score);
-      const recordName = topScore > 0 ? topName : '—';
-      elRecord.textContent = `${recordName} ${maxScore}`;
-    }
-    
-    function getEnemyColors(){
-      const idx = ((level - 1) % colorPalettes.length);
-      return colorPalettes[idx];
+    function updateHUD(){
+      const top=document.querySelector('#topList li');
+      const ts=top?parseInt(top.textContent.split('—')[1]?.trim())||0:0;
+      const tn=top?top.textContent.split('—')[0].trim():'—';
+      maxScore=Math.max(maxScore,ts,score);
+      if(ts>0) maxName=tn;
     }
 
-    function showMenu(msg){
-      menuTitle.textContent = msg||'Presiona INICIAR';
+    function showMenu(msg,showLb=true){
+      menuTitle.textContent=msg||'Presiona INICIAR';
       overlay.style.display='flex';
-      leaderboard.style.display='block';
+      leaderboard.style.display=showLb?'flex':'none';
+      if(shipSelect) shipSelect.style.display=msg==='Pausado'?'none':'block';
     }
     function hideMenu(){
       overlay.style.display='none';
       leaderboard.style.display='none';
     }
 
+    // ── Input ────────────────────────────────────────────────────
     function fire(){
-      const now = Date.now();
-      if(now - lastFire < fireCooldown) return;
-      lastFire = now;
-      bullets.push({x: player.x + player.w/2 - 3, y: player.y-8, w:6,h:10, speed:10});
+      const now=Date.now(); if(now-lastFire<fireCooldown) return;
+      lastFire=now;
+      bullets.push({x:player.x+player.w/2-3,y:player.y-8,w:6,h:10,speed:10});
       soundFire();
     }
 
-    // Controls (keyboard)
-    document.addEventListener('keydown', e=>{
-      if(e.code==='Space'){ e.preventDefault(); }
-      if(e.code==='KeyP'){ running = !running; if(!running) showMenu('Pausado'); else hideMenu(); }
+    document.addEventListener('keydown',e=>{
+      if(e.code==='Space') e.preventDefault();
+      if(e.code==='KeyP'){ running=!running; if(!running) showMenu('Pausado',false); else hideMenu(); }
       keys[e.code]=true;
     });
-    document.addEventListener('keyup', e=>{ keys[e.code]=false; });
+    document.addEventListener('keyup',e=>{ keys[e.code]=false; });
 
-    // Support arrow keys and A/D
     function applyInput(){
-      if(keys['ArrowLeft']||keys['KeyA']){ player.x -= player.speed; }
-      if(keys['ArrowRight']||keys['KeyD']){ player.x += player.speed; }
-      if(keys['Space']){ fire(); }
-      // clamp
-      if(player.x < 6) player.x = 6;
-      if(player.x + player.w > LOG_W-6) player.x = LOG_W-6 - player.w;
+      if(keys['ArrowLeft']||keys['KeyA']) player.x-=player.speed;
+      if(keys['ArrowRight']||keys['KeyD']) player.x+=player.speed;
+      if(keys['Space']) fire();
+      if(player.x<6) player.x=6;
+      if(player.x+player.w>LOG_W-6) player.x=LOG_W-6-player.w;
     }
 
-    // Touch / Pointer handlers for mobile/touch devices
-    function getLogicalPos(clientX){
-      const rect = canvas.getBoundingClientRect();
-      const ratio = (clientX - rect.left) / rect.width;
-      return ratio * LOG_W;
-    }
+    function getLogicalPos(cx){ const r=canvas.getBoundingClientRect(); return((cx-r.left)/r.width)*LOG_W; }
+    function onPointerDown(x,id){ pointerActive=true; activePointerId=id; player.x=getLogicalPos(x)-player.w/2; if(!running){ running=true; hideMenu(); } fire(); }
+    function onPointerMove(x,id){ if(!pointerActive||id!==activePointerId) return; player.x=getLogicalPos(x)-player.w/2; }
+    function onPointerUp(id){ if(id!==activePointerId) return; pointerActive=false; activePointerId=null; }
 
-    function onPointerDown(x, id){
-      pointerActive = true; activePointerId = id;
-      const lx = getLogicalPos(x);
-      player.x = lx - player.w/2;
-      // hide keyboard hints on touch devices
-      if(controls) controls.style.display = 'none';
-      // start running if menu visible
-      if(!running){ running = true; hideMenu(); }
-      // immediate fire
-      fire();
-    }
-    function onPointerMove(x, id){
-      if(!pointerActive || id !== activePointerId) return;
-      const lx = getLogicalPos(x);
-      player.x = lx - player.w/2;
-    }
-    function onPointerUp(id){
-      if(id !== activePointerId) return;
-      pointerActive = false; activePointerId = null;
-    }
+    canvas.addEventListener('touchstart',e=>{ e.preventDefault(); const t=e.changedTouches[0]; onPointerDown(t.clientX,t.identifier); },{passive:false});
+    canvas.addEventListener('touchmove',e=>{ e.preventDefault(); const t=e.changedTouches[0]; onPointerMove(t.clientX,t.identifier); },{passive:false});
+    canvas.addEventListener('touchend',e=>{ e.preventDefault(); const t=e.changedTouches[0]; onPointerUp(t.identifier); },{passive:false});
+    canvas.addEventListener('touchcancel',e=>{ e.preventDefault(); const t=e.changedTouches[0]; onPointerUp(t.identifier); },{passive:false});
+    canvas.addEventListener('pointerdown',e=>{ if(e.pointerType==='touch'||e.pointerType==='pen'){ e.preventDefault(); onPointerDown(e.clientX,e.pointerId); } });
+    canvas.addEventListener('pointermove',e=>{ if(e.pointerType==='touch'||e.pointerType==='pen') onPointerMove(e.clientX,e.pointerId); });
+    window.addEventListener('pointerup',e=>{ if(e.pointerType==='touch'||e.pointerType==='pen') onPointerUp(e.pointerId); });
 
-    // Touch events
-    canvas.addEventListener('touchstart', e=>{ e.preventDefault(); const t = e.changedTouches[0]; onPointerDown(t.clientX, t.identifier); }, {passive:false});
-    canvas.addEventListener('touchmove', e=>{ e.preventDefault(); const t = e.changedTouches[0]; onPointerMove(t.clientX, t.identifier); }, {passive:false});
-    canvas.addEventListener('touchend', e=>{ e.preventDefault(); const t = e.changedTouches[0]; onPointerUp(t.identifier); }, {passive:false});
-    canvas.addEventListener('touchcancel', e=>{ e.preventDefault(); const t = e.changedTouches[0]; onPointerUp(t.identifier); }, {passive:false});
-
-    // Pointer events fallback (stylus/mouse on touch devices)
-    canvas.addEventListener('pointerdown', e=>{ if(e.pointerType==='touch' || e.pointerType==='pen'){ e.preventDefault(); onPointerDown(e.clientX, e.pointerId); } });
-    canvas.addEventListener('pointermove', e=>{ if(e.pointerType==='touch' || e.pointerType==='pen'){ onPointerMove(e.clientX, e.pointerId); } });
-    window.addEventListener('pointerup', e=>{ if(e.pointerType==='touch' || e.pointerType==='pen'){ onPointerUp(e.pointerId); } });
-
-    // Game update
-    let lastTime = 0;
-    let gameOverHandled = false; // prevents duplicate Game Over prompts
+    // ── Update ───────────────────────────────────────────────────
+    let lastTime=0;
     function update(dt){
+      stepParticles(); // always, even when paused (explosions continue)
       if(!running) return;
-      
-      // Hide level display after 1 second
-      if(levelDisplayTime && Date.now() - levelDisplayTime > 1000){
-        levelDisplay.style.display = 'none';
-        levelDisplayTime = 0;
-      }
-      
+
+      if(levelDisplayTime && Date.now()-levelDisplayTime>1000) levelDisplayTime=0;
+
       applyInput();
-      let lifeLostThisFrame = false;
+      if(pointerActive) fire();
+      let lifeLostThisFrame=false;
 
-      // if pointer active, allow auto-fire
-      if(pointerActive){ fire(); }
-
-      // move bullets
       for(let i=bullets.length-1;i>=0;i--){
-        bullets[i].y -= bullets[i].speed;
-        if(bullets[i].y < -20) bullets.splice(i,1);
+        bullets[i].y-=bullets[i].speed;
+        if(bullets[i].y<-20) bullets.splice(i,1);
       }
 
-      // move enemies as a group
-      let rightmost = 0, leftmost = LOG_W;
-      enemies.forEach(e=>{ if(!e.alive) return; rightmost = Math.max(rightmost, e.x+e.w); leftmost = Math.min(leftmost, e.x); });
-      // change direction if touching edges
-      if(rightmost > LOG_W-12) enemyDir = -1, enemies.forEach(e=>e.y += enemyDrop);
-      else if(leftmost < 12) enemyDir = 1, enemies.forEach(e=>e.y += enemyDrop);
+      let rightmost=0,leftmost=LOG_W;
+      enemies.forEach(e=>{ if(!e.alive) return; rightmost=Math.max(rightmost,e.x+e.w); leftmost=Math.min(leftmost,e.x); });
+      if(rightmost>LOG_W-12){ enemyDir=-1; enemies.forEach(e=>e.y+=enemyDrop); }
+      else if(leftmost<12){ enemyDir=1; enemies.forEach(e=>e.y+=enemyDrop); }
+      enemies.forEach(e=>{ if(e.alive) e.x+=enemyDir*enemySpeed; });
 
-      enemies.forEach(e=>{ if(!e.alive) return; e.x += enemyDir * enemySpeed; });
-
-      // collisions bullets vs enemies
+      const ecol=getEnemyColors();
       for(let i=bullets.length-1;i>=0;i--){
-        const b = bullets[i];
+        const b=bullets[i];
         for(let j=0;j<enemies.length;j++){
-          const en = enemies[j]; if(!en.alive) continue;
-          if(rectIntersect(b, en)){
-            soundImpact();
-            en.alive = false; bullets.splice(i,1); score += 100; updateHUD(); break;
+          const en=enemies[j]; if(!en.alive) continue;
+          if(rectIntersect(b,en)){
+            spawnExplosion(en.x+en.w/2,en.y+en.h/2,ecol.fill,ecol.stroke);
+            soundImpact(); en.alive=false; bullets.splice(i,1); score+=100; updateHUD(); break;
           }
         }
       }
 
-      // compute how many were already dead BEFORE processing player collisions
-      const deadBefore = enemies.filter(e => !e.alive).length;
-
-      // enemies reach player or bottom
-      for(let en of enemies){
+      const deadBefore=enemies.filter(e=>!e.alive).length;
+      for(const en of enemies){
         if(!en.alive) continue;
-        if(en.y + en.h >= player.y){
-          // only flag a life loss once per frame even if multiple enemies overlap
+        if(en.y+en.h>=player.y){
           if(!lifeLostThisFrame){
-            soundExplosion();
-            lives = Math.max(0, lives - 1);
-            updateHUD();
-            lifeLostThisFrame = true;
+            spawnExplosion(player.x+player.w/2,player.y+player.h/2,'#39ff14','#bbff88',true);
+            soundExplosion(); lives=Math.max(0,lives-1); updateHUD(); lifeLostThisFrame=true;
           }
-          // mark the colliding enemy dead (but deadBefore does not include this one)
-          en.alive = false;
+          en.alive=false;
         }
       }
 
-      // If a life was lost this frame, handle respawn or game over
       if(lifeLostThisFrame){
-        if(lives <= 0){
-          // Game Over
-          gameOver = true;
-          running = false;
-          soundGameOver();
-          showMenu('Game Over');
-          // On touch devices show leaderboard when game ends
-          if(isTouchDevice && leaderboard) leaderboard.style.display = 'block';
+        if(lives<=0){
+          gameOver=true; running=false; soundGameOver(); showMenu('Game Over');
           if(!gameOverHandled){
-            gameOverHandled = true;
+            gameOverHandled=true;
             setTimeout(()=>{
               try{
-                const name = prompt('Game Over. Ingresa tu nombre para guardar el puntaje:','Anon');
-                if(name){ saveScore(name, score).then(()=>{ loadTop10(); alert('Puntaje guardado.'); }).catch(err=>{ console.error(err); alert('Error guardando puntaje'); }); }
+                const name=prompt('Game Over. Ingresa tu nombre para guardar el puntaje:','Anon');
+                if(name) saveScore(name,score).then(()=>{ loadTop10(); alert('Puntaje guardado.'); }).catch(e=>{ console.error(e); alert('Error guardando puntaje'); });
               }catch(e){ console.error(e); }
             },150);
           }
-        }else{
-          // Respawn level keeping count of destroyed enemies (deadBefore excludes the enemies that collided this frame)
+        } else {
           restartLevelPreserveKills(deadBefore);
         }
       }
 
-      // level cleared? only check when running
       if(running && enemies.every(e=>!e.alive)){
-        level++;
-        if(level > 10) { level = 1; enemySpeed = 1.0; } else { enemySpeed += 0.6; }
-        levelDisplayTime = Date.now();
-        levelDisplay.textContent = `LEVEL ${level}`;
-        levelDisplay.style.display = 'block';
-        spawnEnemies(3 + Math.min(3, Math.floor(level/2)), 6 + Math.min(4, Math.floor(level/2))); 
+        level++; if(level>10){ level=1; enemySpeed=1.0; } else enemySpeed+=0.6;
+        levelDisplayTime=Date.now();
+        spawnEnemies(3+Math.min(3,Math.floor(level/2)),6+Math.min(4,Math.floor(level/2)));
         updateHUD();
       }
     }
 
-    function rectIntersect(a,b){ return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y; }
+    function rectIntersect(a,b){ return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y; }
 
-    // Draw
-    function draw(){
-      // clear to dark
-      ctx.fillStyle = '#001218'; ctx.fillRect(0,0,LOG_W,LOG_H);
-
-      // stars - simple
-      for(let i=0;i<60;i++){ ctx.fillStyle='rgba(255,255,255,0.03)'; ctx.fillRect((i*37)%LOG_W, (i*13)%LOG_H, 2,2); }
-
-      // player
-      drawPlayer();
-
-      // bullets
-      ctx.fillStyle = '#39ff14';
-      bullets.forEach(b=>{ ctx.fillRect(b.x, b.y, b.w, b.h); });
-
-      // enemies
-      const colors = getEnemyColors();
-      enemies.forEach((e,idx)=>{
-        if(!e.alive) return;
-        // simple ship shape
-        ctx.fillStyle = colors.fill;
-        ctx.fillRect(e.x, e.y, e.w, e.h);
-        ctx.fillStyle = colors.stroke;
-        ctx.fillRect(e.x+6, e.y+4, e.w-12, e.h-8);
-      });
-
-      // HUD overlay handled by DOM
-    }
-
-    function drawPlayer(){
-      // triangular ship
+    // ── HUD (drawn on canvas) ────────────────────────────────────
+    function drawHUD(){
       ctx.save();
-      ctx.translate(player.x + player.w/2, player.y + player.h/2);
-      ctx.fillStyle = player.color;
-      ctx.beginPath(); ctx.moveTo(0,-player.h/2); ctx.lineTo(-player.w/2, player.h/2); ctx.lineTo(player.w/2, player.h/2); ctx.closePath(); ctx.fill();
+      ctx.textBaseline='top';
+
+      // Score — top left
+      ctx.font='bold 26px Consolas,monospace'; ctx.fillStyle='#39ff14'; ctx.textAlign='left';
+      ctx.fillText(score,14,12);
+
+      // Record — top center
+      ctx.font='bold 18px Consolas,monospace'; ctx.fillStyle='#ff4444'; ctx.textAlign='center';
+      ctx.fillText(`${maxName}  ${maxScore}`,LOG_W/2,16);
+
+      // Version — top right
+      ctx.font='bold 14px Consolas,monospace'; ctx.fillStyle='#aab'; ctx.textAlign='right';
+      ctx.fillText('v0.6',LOG_W-10,12);
+
+      // Firebase dot
+      ctx.fillStyle=fbReady?'#0f0':'#f44';
+      ctx.beginPath(); ctx.arc(LOG_W-10,36,5,0,Math.PI*2); ctx.fill();
+
+      // Lives — mini ships bottom left
+      for(let i=0;i<lives;i++){
+        const spr=PSPRITES[selectedShip];
+        ctx.save(); ctx.translate(14+i*22,LOG_H-16);
+        ctx.scale(.44,.44);
+        renderSprite(ctx,spr,0,0,'#39ff14','#bbff88');
+        ctx.restore();
+      }
+
+      // Level display — animated center
+      if(levelDisplayTime && Date.now()-levelDisplayTime<=1000){
+        ctx.textBaseline='middle'; ctx.textAlign='center';
+        ctx.font='bold 64px Consolas,monospace'; ctx.fillStyle='#39ff14';
+        ctx.shadowColor='#39ff14'; ctx.shadowBlur=20;
+        ctx.fillText(`LEVEL ${level}`,LOG_W/2,LOG_H/2); ctx.shadowBlur=0;
+      }
+
       ctx.restore();
     }
 
+    // ── Draw ─────────────────────────────────────────────────────
+    function draw(){
+      ctx.fillStyle='#001218'; ctx.fillRect(0,0,LOG_W,LOG_H);
+
+      // Stars
+      for(let i=0;i<60;i++){ ctx.fillStyle='rgba(255,255,255,0.03)'; ctx.fillRect((i*37)%LOG_W,(i*13)%LOG_H,2,2); }
+
+      // Player sprite
+      const pspr=PSPRITES[selectedShip];
+      const psw=pspr.d[0].length*pspr.s, psh=pspr.d.length*pspr.s;
+      renderSprite(ctx,pspr,player.x+Math.round((player.w-psw)/2),player.y+Math.round((player.h-psh)/2),'#39ff14','#bbff88');
+
+      // Bullets
+      ctx.fillStyle='#39ff14';
+      bullets.forEach(b=>ctx.fillRect(b.x,b.y,b.w,b.h));
+
+      // Enemy sprites
+      const ecol=getEnemyColors();
+      enemies.forEach(e=>{
+        if(!e.alive) return;
+        const espr=ESPRITES[e.type];
+        const esw=espr.d[0].length*espr.s, esh=espr.d.length*espr.s;
+        renderSprite(ctx,espr,e.x+Math.round((e.w-esw)/2),e.y+Math.round((e.h-esh)/2),ecol.fill,ecol.stroke);
+      });
+
+      drawParticles();
+      drawHUD();
+    }
+
     function loop(ts){
-      const dt = ts - lastTime; lastTime = ts;
-      update(dt);
-      draw();
+      const dt=ts-lastTime; lastTime=ts;
+      update(dt); draw();
       requestAnimationFrame(loop);
     }
 
-    // Buttons
-    document.getElementById('btnStart').addEventListener('click', ()=>{ 
-      if(gameOver){ reset(); gameOver = false; gameOverHandled = false; } 
-      running=true; 
-      gameOver=false; 
-      levelDisplayTime = Date.now();
-      levelDisplay.textContent = `LEVEL ${level}`;
-      levelDisplay.style.display = 'block';
-      hideMenu(); 
+    // ── Buttons ──────────────────────────────────────────────────
+    document.getElementById('btnStart').addEventListener('click',()=>{
+      if(gameOver){ reset(); gameOver=false; gameOverHandled=false; }
+      running=true; gameOver=false; levelDisplayTime=Date.now(); hideMenu();
     });
-    document.getElementById('btnRestart').addEventListener('click', ()=>{ reset(); hideMenu(); });
+    document.getElementById('btnRestart').addEventListener('click',()=>{ reset(); hideMenu(); });
 
-    // Start
-    // hide leaderboard on touch devices while playing
-    if(isTouchDevice && leaderboard){ leaderboard.style.display = 'none'; }
+    if(isTouchDevice && controlsHint) controlsHint.textContent='Toca la pantalla para mover y disparar';
+
+    setupShipSelector();
     reset();
     requestAnimationFrame(loop);
-
-    // Pause on blur
-    window.addEventListener('blur', ()=>{ /* optional pause */ });
-
-    // Focus handling
-    canvas.addEventListener('click', ()=>{ canvas.focus(); });
-
-    // If touch device, show touch hint
-    if(isTouchDevice){ if(controls) controls.textContent = 'Toca la pantalla para mover y disparar'; }
-    
-    // Make updateHUD globally accessible for loadTop10
-    window.updateGameHUD = updateHUD;
+    canvas.addEventListener('click',()=>canvas.focus());
+    window.updateGameHUD=updateHUD;
 
   })();
   </script>
