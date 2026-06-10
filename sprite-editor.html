@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Sprite Editor</title>
+  <style>
+    body { margin: 0; background: #06071a; color: #fff; font-family: Consolas, monospace; display: flex; flex-direction: column; align-items: center; padding: 24px; gap: 20px; }
+    h2 { margin: 0; color: #39ff14; letter-spacing: 2px; }
+    .panels { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+    .panel { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+    .panel-title { font-size: 12px; color: #778; letter-spacing: 2px; text-transform: uppercase; }
+    /* Grid editor */
+    .grid { display: grid; border: 1px solid #334; cursor: crosshair; }
+    .cell { width: 28px; height: 28px; border: 1px solid #1a2a1a; box-sizing: border-box; transition: background .05s; }
+    .cell[data-v="0"] { background: #001018; }
+    .cell[data-v="1"] { background: #39ff14; }
+    .cell[data-v="2"] { background: #bbff88; }
+    .cell:hover { filter: brightness(1.4); }
+    /* Preview canvas */
+    #preview { background: #001018; border: 2px solid #334; image-rendering: pixelated; }
+    /* Controls */
+    .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
+    label { font-size: 12px; color: #9aa; }
+    input[type=number] { background: #0a1020; color: #fff; border: 1px solid #334; padding: 4px 8px; width: 60px; font-family: Consolas, monospace; border-radius: 4px; }
+    button { background: #39ff14; color: #000; border: none; padding: 7px 14px; border-radius: 5px; cursor: pointer; font-weight: 700; font-size: 13px; font-family: Consolas, monospace; }
+    button.sec { background: transparent; color: #fff; border: 1px solid #445; }
+    button:hover { filter: brightness(1.15); }
+    /* Color picker */
+    .color-picker { display: flex; gap: 8px; }
+    .color-opt { width: 32px; height: 32px; border-radius: 5px; border: 2px solid #334; cursor: pointer; transition: border-color .1s, transform .1s; }
+    .color-opt:hover { transform: scale(1.1); }
+    .color-opt.active { border-color: #fff; box-shadow: 0 0 8px rgba(255,255,255,.4); }
+    .color-opt[data-c="0"] { background: #001018; }
+    .color-opt[data-c="1"] { background: #39ff14; }
+    .color-opt[data-c="2"] { background: #bbff88; }
+    .color-opt[data-c="3"] { background: #ff3333; }
+    .cell[data-v="3"] { background: #ff3333; }
+    /* Output */
+    #output { background: #0a1020; border: 1px solid #334; border-radius: 6px; padding: 14px 18px; font-size: 13px; color: #39ff14; white-space: pre; max-width: 520px; width: 100%; overflow-x: auto; }
+    #copyBtn { align-self: flex-end; }
+    .hint { font-size: 11px; color: #556; }
+    #importArea { background: #0a1020; border: 1px solid #334; border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #9cf; font-family: Consolas, monospace; width: 100%; height: 90px; resize: vertical; }
+    #importArea::placeholder { color: #445; }
+    #importError { font-size: 11px; color: #f66; min-height: 16px; }
+  </style>
+</head>
+<body>
+  <h2>SPRITE EDITOR</h2>
+
+  <div class="controls">
+    <label>Filas <input type="number" id="rows" value="8" min="1" max="20"></label>
+    <label>Cols <input type="number" id="cols" value="12" min="1" max="24"></label>
+    <label>Scale <input type="number" id="scale" value="4" min="1" max="8"></label>
+    <button onclick="applySize()">Aplicar tamaño</button>
+    <button class="sec" onclick="clearGrid()">Limpiar</button>
+    <button class="sec" onclick="mirrorH()">Espejo H</button>
+  </div>
+
+  <div class="color-picker">
+    <div class="color-opt active" data-c="0" title="0 = transparente" onclick="selectColor(0)"></div>
+    <div class="color-opt" data-c="1" title="1 = color principal" onclick="selectColor(1)"></div>
+    <div class="color-opt" data-c="2" title="2 = acento/highlight" onclick="selectColor(2)"></div>
+    <div class="color-opt" data-c="3" title="3 = rojo" onclick="selectColor(3)"></div>
+  </div>
+
+  <div style="width:100%;max-width:520px;display:flex;flex-direction:column;gap:6px">
+    <div class="panel-title">Pegar sprite del juego</div>
+    <textarea id="importArea" placeholder="Pegá aquí el bloque { s:4, d:[ ... ]} y presioná Cargar"></textarea>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button onclick="importSprite()">Cargar</button>
+      <div id="importError"></div>
+    </div>
+  </div>
+
+  <div class="panels">
+    <div class="panel">
+      <div class="panel-title">Editor (click o arrastrar)</div>
+      <div class="grid" id="grid"></div>
+      <div class="hint">Click = poner color activo · Click derecho = borrar (0)</div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Preview (tamaño real)</div>
+      <canvas id="preview" width="200" height="200"></canvas>
+    </div>
+  </div>
+
+  <div style="width:100%;max-width:520px;display:flex;flex-direction:column;gap:8px">
+    <div class="panel-title">Código generado</div>
+    <div id="output"></div>
+    <button id="copyBtn" onclick="copyOutput()">Copiar</button>
+  </div>
+
+<script>
+  let rows = 8, cols = 12, scale = 4;
+  let activeColor = 0;
+  let painting = false;
+  let paintValue = 0;
+
+  // Initial sprite data
+  let grid = [
+    [0,0,0,0,0,1,1,0,0,0,0,0],
+    [0,0,0,0,1,2,2,1,0,0,0,0],
+    [0,0,0,1,1,2,2,1,1,0,0,0],
+    [0,0,1,1,1,1,1,1,1,1,0,0],
+    [0,1,1,0,0,1,1,0,0,1,1,0],
+    [1,1,0,0,0,1,1,0,0,0,1,1],
+    [0,0,0,0,0,2,2,0,0,0,0,0],
+    [0,0,0,1,1,0,0,1,1,0,0,0],
+  ];
+
+  function selectColor(c){
+    activeColor = c;
+    document.querySelectorAll('.color-opt').forEach(el => el.classList.toggle('active', +el.dataset.c === c));
+  }
+
+  function buildGrid(){
+    const container = document.getElementById('grid');
+    container.style.gridTemplateColumns = `repeat(${cols}, 28px)`;
+    container.innerHTML = '';
+    for(let r = 0; r < rows; r++){
+      for(let c = 0; c < cols; c++){
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        const v = (grid[r] && grid[r][c] !== undefined) ? grid[r][c] : 0;
+        cell.dataset.r = r; cell.dataset.c = c; cell.dataset.v = v;
+        cell.addEventListener('mousedown', e => {
+          e.preventDefault();
+          painting = true;
+          paintValue = e.button === 2 ? 0 : activeColor;
+          setCellValue(cell, paintValue);
+        });
+        cell.addEventListener('mouseenter', e => {
+          if(painting) setCellValue(cell, paintValue);
+        });
+        container.appendChild(cell);
+      }
+    }
+  }
+
+  function setCellValue(cell, v){
+    const r = +cell.dataset.r, c = +cell.dataset.c;
+    grid[r][c] = v;
+    cell.dataset.v = v;
+    renderPreview();
+    renderOutput();
+  }
+
+  function applySize(){
+    const nr = +document.getElementById('rows').value;
+    const nc = +document.getElementById('cols').value;
+    scale = +document.getElementById('scale').value;
+    // Resize grid data
+    const newGrid = [];
+    for(let r = 0; r < nr; r++){
+      const row = [];
+      for(let c = 0; c < nc; c++){
+        row.push((grid[r] && grid[r][c] !== undefined) ? grid[r][c] : 0);
+      }
+      newGrid.push(row);
+    }
+    rows = nr; cols = nc; grid = newGrid;
+    buildGrid();
+    renderPreview();
+    renderOutput();
+  }
+
+  function clearGrid(){
+    grid = Array.from({length: rows}, () => Array(cols).fill(0));
+    buildGrid(); renderPreview(); renderOutput();
+  }
+
+  function mirrorH(){
+    grid = grid.map(row => [...row].reverse());
+    buildGrid(); renderPreview(); renderOutput();
+  }
+
+  function renderPreview(){
+    scale = +document.getElementById('scale').value;
+    const cvs = document.getElementById('preview');
+    const pw = cols * scale, ph = rows * scale;
+    cvs.width = pw; cvs.height = ph;
+    cvs.style.width = pw * 2 + 'px';
+    cvs.style.height = ph * 2 + 'px';
+    const ctx = cvs.getContext('2d');
+    ctx.clearRect(0, 0, pw, ph);
+    grid.forEach((row, ry) => row.forEach((v, cx) => {
+      if(!v) return;
+      ctx.fillStyle = v === 2 ? '#bbff88' : v === 3 ? '#ff3333' : '#39ff14';
+      ctx.fillRect(cx * scale, ry * scale, scale, scale);
+    }));
+  }
+
+  function renderOutput(){
+    const lines = grid.map(row => '        [' + row.join(',') + '],');
+    const s = +document.getElementById('scale').value;
+    const code = `{ s:${s}, d:[\n${lines.join('\n')}\n      ]}`;
+    document.getElementById('output').textContent = code;
+  }
+
+  function importSprite(){
+    const errEl = document.getElementById('importError');
+    errEl.textContent = '';
+    const raw = document.getElementById('importArea').value.trim();
+    try {
+      // Extract s value
+      const sMatch = raw.match(/s\s*:\s*(\d+)/);
+      if(!sMatch) throw new Error('No se encontró "s:"');
+      const newScale = parseInt(sMatch[1]);
+
+      // Extract the d array — grab everything between the first [ after "d:" and the matching ]
+      const dStart = raw.indexOf('[', raw.search(/d\s*:/));
+      if(dStart === -1) throw new Error('No se encontró "d:"');
+
+      // Walk brackets to find the outer array end
+      let depth = 0, dEnd = -1;
+      for(let i = dStart; i < raw.length; i++){
+        if(raw[i]==='[') depth++;
+        else if(raw[i]===']'){ depth--; if(depth===0){ dEnd=i; break; } }
+      }
+      if(dEnd === -1) throw new Error('Array "d" incompleto');
+
+      const dRaw = raw.slice(dStart, dEnd+1);
+      // Strip trailing commas before closing brackets (not valid JSON but common in JS)
+      const cleaned = dRaw.replace(/,\s*([}\]])/g, '$1');
+      const parsed = JSON.parse(cleaned);
+      if(!Array.isArray(parsed) || !Array.isArray(parsed[0])) throw new Error('Formato inválido');
+
+      // Load into editor
+      const nr = parsed.length, nc = parsed[0].length;
+      rows = nr; cols = nc; scale = newScale; grid = parsed.map(r => [...r]);
+      document.getElementById('rows').value = nr;
+      document.getElementById('cols').value = nc;
+      document.getElementById('scale').value = newScale;
+      buildGrid(); renderPreview(); renderOutput();
+      errEl.style.color = '#39ff14';
+      errEl.textContent = '¡Cargado!';
+      setTimeout(()=> errEl.textContent='', 1500);
+    } catch(e) {
+      errEl.style.color = '#f66';
+      errEl.textContent = 'Error: ' + e.message;
+    }
+  }
+
+  function copyOutput(){
+    navigator.clipboard.writeText(document.getElementById('output').textContent)
+      .then(() => { const b = document.getElementById('copyBtn'); b.textContent = '¡Copiado!'; setTimeout(()=>b.textContent='Copiar', 1500); });
+  }
+
+  document.addEventListener('mouseup', () => painting = false);
+  document.getElementById('grid').addEventListener('contextmenu', e => e.preventDefault());
+
+  buildGrid();
+  renderPreview();
+  renderOutput();
+</script>
+</body>
+</html>
