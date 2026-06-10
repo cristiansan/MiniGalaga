@@ -13,21 +13,20 @@
     header p{margin:0;font-size:clamp(10px,1.6vw,13px);color:#9aa}
     #gameWrap{position:relative;width:900px;max-width:95vw}
     canvas{display:block;background:#001018;width:100%;height:auto;border:4px solid #111;box-shadow:0 8px 30px rgba(0,0,0,.6)}
-    #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:50}
-    #menu{background:rgba(8,12,23,.93);padding:clamp(12px,3vw,20px);border-radius:10px;text-align:center;width:min(340px,86vw);pointer-events:auto;border:1px solid #1a2a1a}
-    #menu h2{margin:0 0 6px;font-size:clamp(15px,3vw,22px)}
-    #menu p{margin:0 0 10px;font-size:clamp(11px,1.8vw,14px);color:#bbb}
-    #shipSelect{margin-top:10px;border-top:1px solid #1a3a1a;padding-top:10px}
-    .sel-label{font-size:10px;color:#778;letter-spacing:2px;margin-bottom:6px;text-transform:uppercase}
-    #shipOptions{display:flex;gap:8px;justify-content:center}
-    #shipOptions canvas{cursor:pointer;border-radius:6px;background:#001018;border:2px solid #334;transition:border-color .15s,transform .1s}
-    #shipOptions canvas:hover{border-color:#667;transform:scale(1.08)}
-    #shipOptions canvas.sel{border-color:var(--accent);box-shadow:0 0 8px rgba(57,255,20,.4)}
-    button{background:var(--accent);color:#000;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:700;font-size:clamp(12px,2vw,15px)}
-    button.secondary{background:transparent;color:#fff;border:1px solid #555}
     #leaderboard{position:absolute;inset:0;background:rgba(0,6,24,0.88);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:1;padding:16px}
     #leaderboard strong{font-size:clamp(20px,4vw,40px);color:var(--accent);margin-bottom:clamp(6px,1.5vw,14px);display:block;letter-spacing:clamp(2px,0.5vw,4px);text-shadow:0 0 20px var(--accent)}
     #topList{margin:0;padding-left:clamp(24px,5vw,60px);color:#fff;text-align:left;font-size:clamp(12px,2vw,22px);line-height:2}
+    #versionBtn{position:absolute;top:12px;right:14px;font-size:14px;color:#aab;font-family:Consolas,monospace;cursor:pointer;z-index:10;user-select:none;transition:color .15s}
+    #versionBtn:hover{color:#fff;text-shadow:0 0 8px #fff}
+    #changelogModal{position:absolute;inset:0;background:rgba(0,6,24,0.92);display:none;align-items:center;justify-content:center;z-index:200}
+    #changelogBox{background:#0a0f1e;border:1px solid var(--accent);border-radius:10px;padding:20px 28px;width:min(360px,90%);position:relative;box-shadow:0 0 30px rgba(57,255,20,.15)}
+    #changelogBox h3{margin:0 0 14px;font-size:18px;color:var(--accent);letter-spacing:2px}
+    #changelogBox ul{margin:0;padding-left:0;list-style:none}
+    #changelogBox li{padding:6px 0;border-bottom:1px solid #1a2a1a;font-size:clamp(12px,1.8vw,14px);color:#ccc}
+    #changelogBox li:last-child{border-bottom:none}
+    #changelogBox li strong{color:#fff;margin-right:6px}
+    #closeChangelog{position:absolute;top:10px;right:14px;background:none;border:none;color:#778;font-size:20px;cursor:pointer;line-height:1;padding:0}
+    #closeChangelog:hover{color:#fff}
   </style>
 </head>
 <body>
@@ -41,18 +40,20 @@
       <strong>TOP 10</strong>
       <ol id="topList"></ol>
     </div>
-    <div id="overlay">
-      <div id="menu" role="dialog">
-        <h2 id="menuTitle">Presiona INICIAR</h2>
-        <p id="menuText">Una nave, dispara a las naves enemigas. Buena suerte.</p>
-        <div id="shipSelect">
-          <div class="sel-label">Elige tu nave</div>
-          <div id="shipOptions"></div>
-        </div>
-        <div style="margin-top:12px">
-          <button id="btnStart">Iniciar</button>
-          <button id="btnRestart" class="secondary" style="margin-left:8px">Reiniciar</button>
-        </div>
+    <div id="versionBtn">v0.7</div>
+    <div id="changelogModal">
+      <div id="changelogBox">
+        <button id="closeChangelog">×</button>
+        <h3>VERSIONES</h3>
+        <ul>
+          <li><strong>v0.7</strong> Animación con sprites y sonidos</li>
+          <li><strong>v0.6</strong> Mejora en la UI</li>
+          <li><strong>v0.5</strong> Ranking Top 10, cambio de niveles y dificultad</li>
+          <li><strong>v0.4</strong> Bugs de vidas y niveles</li>
+          <li><strong>v0.3</strong> Base de datos para guardar los rankings</li>
+          <li><strong>v0.2</strong> Disparo continuo</li>
+          <li><strong>v0.1</strong> Versión inicial</li>
+        </ul>
       </div>
     </div>
   </div>
@@ -212,26 +213,7 @@
       }));
     }
 
-    let selectedShip = parseInt(localStorage.getItem('galaga_ship')||'0');
-
-    function setupShipSelector(){
-      const cont = document.getElementById('shipOptions'); if(!cont) return;
-      cont.innerHTML='';
-      PSPRITES.forEach((spr,idx)=>{
-        const cvs=document.createElement('canvas');
-        cvs.width=58; cvs.height=50;
-        if(idx===selectedShip) cvs.classList.add('sel');
-        const sc=cvs.getContext('2d');
-        const sw=spr.d[0].length*spr.s, sh=spr.d.length*spr.s;
-        renderSprite(sc,spr,Math.floor((58-sw)/2),Math.floor((50-sh)/2),'#39ff14','#bbff88');
-        cvs.addEventListener('click',()=>{
-          selectedShip=idx;
-          localStorage.setItem('galaga_ship',idx);
-          cont.querySelectorAll('canvas').forEach((c,i)=>c.classList.toggle('sel',i===idx));
-        });
-        cont.appendChild(cvs);
-      });
-    }
+    const selectedShip = parseInt(localStorage.getItem('galaga_ship')||'0');
 
     // ── Particle explosions ──────────────────────────────────────
     let particles = [];
@@ -276,10 +258,7 @@
     }
 
     // ── DOM handles ──────────────────────────────────────────────
-    const overlay     = document.getElementById('overlay');
-    const menuTitle   = document.getElementById('menuTitle');
     const leaderboard = document.getElementById('leaderboard');
-    const shipSelect  = document.getElementById('shipSelect');
     const controlsHint= document.getElementById('controlsHint');
     const isTouchDevice = navigator.maxTouchPoints > 0;
 
@@ -323,7 +302,7 @@
       enemySpeed=1; enemyDir=1; gameOver=false; running=false; gameOverHandled=false;
       levelDisplayTime=0; particles=[];
       player.x=LOG_W/2-player.w/2;
-      updateHUD(); spawnEnemies(3,8); showMenu(); loadTop10();
+      updateHUD(); spawnEnemies(3,8); showLeaderboard(); loadTop10();
     }
 
     function updateHUD(){
@@ -334,14 +313,10 @@
       if(ts>0) maxName=tn;
     }
 
-    function showMenu(msg,showLb=true){
-      menuTitle.textContent=msg||'Presiona INICIAR';
-      overlay.style.display='flex';
-      leaderboard.style.display=showLb?'flex':'none';
-      if(shipSelect) shipSelect.style.display=msg==='Pausado'?'none':'block';
+    function showLeaderboard(){
+      leaderboard.style.display='flex';
     }
-    function hideMenu(){
-      overlay.style.display='none';
+    function hideLeaderboard(){
       leaderboard.style.display='none';
     }
 
@@ -355,8 +330,16 @@
 
     document.addEventListener('keydown',e=>{
       if(e.code==='Space') e.preventDefault();
-      if(e.code==='KeyP'){ running=!running; if(!running) showMenu('Pausado',false); else hideMenu(); }
       keys[e.code]=true;
+      if(e.code==='KeyP'){
+        running=!running;
+        if(!running) showLeaderboard(); else hideLeaderboard();
+        return;
+      }
+      if(!running){
+        if(gameOver) reset();
+        running=true; levelDisplayTime=Date.now(); hideLeaderboard();
+      }
     });
     document.addEventListener('keyup',e=>{ keys[e.code]=false; });
 
@@ -369,7 +352,12 @@
     }
 
     function getLogicalPos(cx){ const r=canvas.getBoundingClientRect(); return((cx-r.left)/r.width)*LOG_W; }
-    function onPointerDown(x,id){ pointerActive=true; activePointerId=id; player.x=getLogicalPos(x)-player.w/2; if(!running){ running=true; hideMenu(); } fire(); }
+    function onPointerDown(x,id){
+      pointerActive=true; activePointerId=id;
+      player.x=getLogicalPos(x)-player.w/2;
+      if(!running){ if(gameOver) reset(); running=true; hideLeaderboard(); }
+      fire();
+    }
     function onPointerMove(x,id){ if(!pointerActive||id!==activePointerId) return; player.x=getLogicalPos(x)-player.w/2; }
     function onPointerUp(id){ if(id!==activePointerId) return; pointerActive=false; activePointerId=null; }
 
@@ -430,7 +418,7 @@
 
       if(lifeLostThisFrame){
         if(lives<=0){
-          gameOver=true; running=false; soundGameOver(); showMenu('Game Over');
+          gameOver=true; running=false; soundGameOver(); showLeaderboard();
           if(!gameOverHandled){
             gameOverHandled=true;
             setTimeout(()=>{
@@ -466,11 +454,9 @@
 
       // Record — top center
       ctx.font='bold 18px Consolas,monospace'; ctx.fillStyle='#ff4444'; ctx.textAlign='center';
-      ctx.fillText(`${maxName}  ${maxScore}`,LOG_W/2,16);
+      ctx.fillText(maxScore,LOG_W/2,16);
 
-      // Version — top right
-      ctx.font='bold 14px Consolas,monospace'; ctx.fillStyle='#aab'; ctx.textAlign='right';
-      ctx.fillText('v0.6',LOG_W-10,12);
+      // Version — drawn by HTML overlay, skip canvas
 
       // Firebase dot
       ctx.fillStyle=fbReady?'#0f0':'#f44';
@@ -531,16 +517,13 @@
       requestAnimationFrame(loop);
     }
 
-    // ── Buttons ──────────────────────────────────────────────────
-    document.getElementById('btnStart').addEventListener('click',()=>{
-      if(gameOver){ reset(); gameOver=false; gameOverHandled=false; }
-      running=true; gameOver=false; levelDisplayTime=Date.now(); hideMenu();
-    });
-    document.getElementById('btnRestart').addEventListener('click',()=>{ reset(); hideMenu(); });
-
     if(isTouchDevice && controlsHint) controlsHint.textContent='Toca la pantalla para mover y disparar';
 
-    setupShipSelector();
+    const changelogModal = document.getElementById('changelogModal');
+    document.getElementById('versionBtn').addEventListener('click',()=>{ changelogModal.style.display='flex'; });
+    document.getElementById('closeChangelog').addEventListener('click',()=>{ changelogModal.style.display='none'; });
+    changelogModal.addEventListener('click',e=>{ if(e.target===changelogModal) changelogModal.style.display='none'; });
+
     reset();
     requestAnimationFrame(loop);
     canvas.addEventListener('click',()=>canvas.focus());
