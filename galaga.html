@@ -404,9 +404,9 @@
     canvas.addEventListener('touchmove',e=>{ e.preventDefault(); const t=e.changedTouches[0]; onPointerMove(t.clientX,t.identifier); },{passive:false});
     canvas.addEventListener('touchend',e=>{ e.preventDefault(); const t=e.changedTouches[0]; onPointerUp(t.identifier); },{passive:false});
     canvas.addEventListener('touchcancel',e=>{ e.preventDefault(); const t=e.changedTouches[0]; onPointerUp(t.identifier); },{passive:false});
-    canvas.addEventListener('pointerdown',e=>{ if(e.pointerType==='touch'||e.pointerType==='pen'){ e.preventDefault(); onPointerDown(e.clientX,e.pointerId); } });
-    canvas.addEventListener('pointermove',e=>{ if(e.pointerType==='touch'||e.pointerType==='pen') onPointerMove(e.clientX,e.pointerId); });
-    window.addEventListener('pointerup',e=>{ if(e.pointerType==='touch'||e.pointerType==='pen') onPointerUp(e.pointerId); });
+    canvas.addEventListener('pointerdown',e=>{ if(e.pointerType==='pen'){ e.preventDefault(); onPointerDown(e.clientX,e.pointerId); } });
+    canvas.addEventListener('pointermove',e=>{ if(e.pointerType==='pen') onPointerMove(e.clientX,e.pointerId); });
+    window.addEventListener('pointerup',e=>{ if(e.pointerType==='pen') onPointerUp(e.pointerId); });
 
     // ── Update ───────────────────────────────────────────────────
     let lastTime=0;
