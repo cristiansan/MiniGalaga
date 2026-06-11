@@ -45,12 +45,13 @@
       <strong>TOP 10</strong>
       <ol id="topList"></ol>
     </div>
-    <div id="versionBtn">v0.9</div>
+    <div id="versionBtn">v0.10</div>
     <div id="changelogModal">
       <div id="changelogBox">
         <button id="closeChangelog">×</button>
         <h3>VERSIONES</h3>
         <ul>
+          <li><strong>v0.10</strong> Fix bug de touch en mobile</li>
           <li><strong>v0.9</strong> Layout responsive para mobile</li>
           <li><strong>v0.8</strong> Animación de viraje en la nave</li>
           <li><strong>v0.7</strong> Animación con sprites y sonidos</li>
@@ -393,7 +394,13 @@
     }
     function onPointerUp(id){ if(id!==activePointerId) return; pointerActive=false; activePointerId=null; playerDir=0; }
 
-    canvas.addEventListener('touchstart',e=>{ e.preventDefault(); const t=e.changedTouches[0]; onPointerDown(t.clientX,t.identifier); },{passive:false});
+    // Cuando el leaderboard cubre el canvas, el touch llega al leaderboard — arrancamos igual
+    leaderboard.addEventListener('touchstart',e=>{
+      audioCtx.resume();
+      if(!running){ if(gameOver) reset(); running=true; hideLeaderboard(); }
+    },{passive:true});
+
+    canvas.addEventListener('touchstart',e=>{ e.preventDefault(); audioCtx.resume(); const t=e.changedTouches[0]; onPointerDown(t.clientX,t.identifier); },{passive:false});
     canvas.addEventListener('touchmove',e=>{ e.preventDefault(); const t=e.changedTouches[0]; onPointerMove(t.clientX,t.identifier); },{passive:false});
     canvas.addEventListener('touchend',e=>{ e.preventDefault(); const t=e.changedTouches[0]; onPointerUp(t.identifier); },{passive:false});
     canvas.addEventListener('touchcancel',e=>{ e.preventDefault(); const t=e.changedTouches[0]; onPointerUp(t.identifier); },{passive:false});
